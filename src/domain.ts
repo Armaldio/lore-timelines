@@ -7,73 +7,122 @@ export type DatePlacement =
 
 export interface Source { id: string; title: string; kind: 'film' | 'book' | 'episode' | 'reference'; url?: string }
 export interface Character { id: string; name: string; description?: string }
-export interface World { id: string; name: string; summary: string; tone: 'teal' | 'coral' | 'gold' }
-export interface Event {
-  id: string; title: string; description: string; placement: DatePlacement; worldId: string
-  spoiler: 'none' | 'mild' | 'major'; uncertainty?: string; sourceIds: string[]; characterIds: string[]
+export interface Continuity { id: string; name: string; summary: string }
+export interface World { id: string; continuityId: string; name: string; summary: string; tone: 'teal' | 'coral' | 'gold' }
+export interface Event { id: string; title: string; description: string; characterIds: string[] }
+export interface Occurrence {
+  id: string; eventId: string; worldId: string; placement: DatePlacement
+  spoiler: 'none' | 'mild' | 'major'; uncertainty?: string; sourceIds: string[]
 }
-export interface Edge { id: string; fromEventId: string; toEventId: string; kind: 'leads-to' | 'branches-to' | 'returns-to' | 'related' }
+export interface Edge { id: string; fromOccurrenceId: string; toOccurrenceId: string; kind: 'leads-to' | 'branches-to' | 'returns-to' | 'related' }
 export interface Universe {
   id: string; title: string; subtitle: string; description: string
-  worlds: World[]; characters: Character[]; sources: Source[]; events: Event[]; edges: Edge[]
+  continuities: Continuity[]; worlds: World[]; characters: Character[]; sources: Source[]
+  events: Event[]; occurrences: Occurrence[]; edges: Edge[]
+}
+
+type RecordValue = Record<string, unknown>
+function isRecord(value: unknown): value is RecordValue { return Boolean(value && typeof value === 'object' && !Array.isArray(value)) }
+function isText(value: unknown): value is string { return typeof value === 'string' && value.trim().length > 0 }
+function idSet(items: unknown[]): Set<string> {
+  return new Set(items.filter((item): item is RecordValue => isRecord(item) && isText(item.id)).map((item) => item.id as string))
 }
 
 export function validateUniverse(value: unknown): string[] {
-  if (!value || typeof value !== 'object') return ['Universe must be an object.']
-  const universe = value as Partial<Universe>
+  if (!isRecord(value)) return ['Universe must be an object.']
   const errors: string[] = []
-  if (typeof universe.id !== 'string' || !universe.id.trim()) errors.push('Universe needs a stable, non-empty id.')
-  if (typeof universe.title !== 'string' || !universe.title.trim()) errors.push('Universe needs a title.')
-  for (const field of ['worlds', 'characters', 'sources', 'events', 'edges'] as const) {
-    if (!Array.isArray(universe[field])) errors.push(`${field} must be an array.`)
+  if (!isText(value.id)) errors.push('Universe needs a stable, non-empty id.')
+  if (!isText(value.title)) errors.push('Universe needs a title.')
+  if (typeof value.subtitle !== 'string' || typeof value.description !== 'string') errors.push('Universe needs a subtitle and description.')
+  const fields = ['continuities', 'worlds', 'characters', 'sources', 'events', 'occurrences', 'edges'] as const
+  const lists: Record<(typeof fields)[number], unknown[]> = { continuities: [], worlds: [], characters: [], sources: [], events: [], occurrences: [], edges: [] }
+  for (const field of fields) {
+    if (!Array.isArray(value[field])) errors.push(`${field} must be an array.`)
+    else lists[field] = value[field] as unknown[]
   }
-  if (errors.length) return errors
-  const collections = [universe.worlds!, universe.characters!, universe.sources!, universe.events!, universe.edges!]
-  const ids = new Set<string>()
-  for (const item of collections.flat()) {
-    if (!item || typeof item !== 'object' || typeof item.id !== 'string' || !item.id.trim()) errors.push('Every record needs a stable, non-empty id.')
-    else if (ids.has(item.id)) errors.push(`Duplicate id: ${item.id}.`)
-    else ids.add(item.id)
+  if (errors.some((error) => error.endsWith('must be an array.'))) return errors
+
+  const allRecords = fields.flatMap((field) => lists[field])
+  const seenIds = new Set<string>()
+  for (const item of allRecords) {
+    if (!isRecord(item) || !isText(item.id)) errors.push('Every record needs a stable, non-empty id.')
+    else if (seenIds.has(item.id)) errors.push(`Duplicate id: ${item.id}.`)
+    else seenIds.add(item.id)
   }
-  const safeIds = (items: unknown[]) => new Set(items.filter((item): item is { id: string } => Boolean(item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string')).map((item) => item.id))
-  const worldIds = safeIds(universe.worlds!)
-  const characterIds = safeIds(universe.characters!)
-  const sourceIds = safeIds(universe.sources!)
-  const eventIds = safeIds(universe.events!)
-  for (const world of universe.worlds!) {
-    if (!world || typeof world !== 'object') continue
-    if (typeof world.name !== 'string' || !world.name.trim()) errors.push(`World ${world.id} needs a name.`)
-    if (typeof world.summary !== 'string') errors.push(`World ${world.id} needs a summary.`)
-    if (!['teal', 'coral', 'gold'].includes(world.tone)) errors.push(`World ${world.id} has an invalid tone.`)
+  const records = Object.fromEntries(fields.map((field) => [field, lists[field].filter(isRecord)])) as Record<(typeof fields)[number], RecordValue[]>
+  const continuityIds = idSet(lists.continuities)
+  const worldIds = idSet(lists.worlds)
+  const characterIds = idSet(lists.characters)
+  const sourceIds = idSet(lists.sources)
+  const eventIds = idSet(lists.events)
+  const occurrenceIds = idSet(lists.occurrences)
+
+  for (const continuity of records.continuities) {
+    if (!isText(continuity.name) || !isText(continuity.summary)) errors.push(`Continuity ${String(continuity.id)} needs a name and summary.`)
   }
-  for (const character of universe.characters!) {
-    if (character && typeof character === 'object' && (typeof character.name !== 'string' || !character.name.trim())) errors.push(`Character ${character.id} needs a name.`)
+  for (const world of records.worlds) {
+    if (!isText(world.name) || !isText(world.summary)) errors.push(`World ${String(world.id)} needs a name and summary.`)
+    if (!continuityIds.has(String(world.continuityId))) errors.push(`World ${String(world.id)} references missing continuity ${String(world.continuityId)}.`)
+    if (!['teal', 'coral', 'gold'].includes(String(world.tone))) errors.push(`World ${String(world.id)} has an invalid tone.`)
   }
-  for (const source of universe.sources!) {
-    if (!source || typeof source !== 'object') continue
-    if (typeof source.title !== 'string' || !source.title.trim()) errors.push(`Source ${source.id} needs a title.`)
-    if (!['film', 'book', 'episode', 'reference'].includes(source.kind)) errors.push(`Source ${source.id} has an invalid kind.`)
+  for (const character of records.characters) if (!isText(character.name)) errors.push(`Character ${String(character.id)} needs a name.`)
+  for (const source of records.sources) {
+    if (!isText(source.title)) errors.push(`Source ${String(source.id)} needs a title.`)
+    if (!['film', 'book', 'episode', 'reference'].includes(String(source.kind))) errors.push(`Source ${String(source.id)} has an invalid kind.`)
+    if (source.url !== undefined) {
+      if (typeof source.url !== 'string') errors.push(`Source ${String(source.id)} has an invalid URL.`)
+      else try {
+        const url = new URL(source.url)
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') errors.push(`Source ${String(source.id)} has an invalid URL.`)
+      } catch { errors.push(`Source ${String(source.id)} has an invalid URL.`) }
+    }
   }
-  for (const event of universe.events!) {
-    if (!event || typeof event !== 'object') continue
-    if (typeof event.title !== 'string' || !event.title.trim()) errors.push(`Event ${event.id} needs a title.`)
-    if (typeof event.description !== 'string') errors.push(`Event ${event.id} needs a description.`)
-    if (!['none', 'mild', 'major'].includes(event.spoiler)) errors.push(`Event ${event.id} has an invalid spoiler scope.`)
-    if (!worldIds.has(event.worldId)) errors.push(`Event ${event.id} references missing world ${event.worldId}.`)
-    if (!event.placement || typeof event.placement.label !== 'string' || !['exact', 'range', 'relative', 'unknown', 'disputed'].includes(event.placement.kind)) errors.push(`Event ${event.id} has an invalid date placement.`)
-    if (event.placement?.kind === 'exact' && typeof event.placement.value !== 'string') errors.push(`Event ${event.id} needs an exact date value.`)
-    if (event.placement?.kind === 'disputed' && (!Array.isArray(event.placement.alternatives) || !event.placement.alternatives.length)) errors.push(`Event ${event.id} needs disputed date alternatives.`)
-    if (!Array.isArray(event.characterIds)) errors.push(`Event ${event.id} characterIds must be an array.`)
-    else for (const id of event.characterIds) if (!characterIds.has(id)) errors.push(`Event ${event.id} references missing character ${id}.`)
-    if (!Array.isArray(event.sourceIds)) errors.push(`Event ${event.id} sourceIds must be an array.`)
-    else for (const id of event.sourceIds) if (!sourceIds.has(id)) errors.push(`Event ${event.id} references missing source ${id}.`)
+  for (const character of records.characters) {
+    if (character.description !== undefined && typeof character.description !== 'string') errors.push(`Character ${String(character.id)} has an invalid description.`)
   }
-  for (const edge of universe.edges!) {
-    if (!edge || typeof edge !== 'object') continue
-    if (!eventIds.has(edge.fromEventId)) errors.push(`Edge ${edge.id} references missing event ${edge.fromEventId}.`)
-    if (!eventIds.has(edge.toEventId)) errors.push(`Edge ${edge.id} references missing event ${edge.toEventId}.`)
-    if (!['leads-to', 'branches-to', 'returns-to', 'related'].includes(edge.kind)) errors.push(`Edge ${edge.id} has an invalid kind.`)
-    if (edge.fromEventId === edge.toEventId) errors.push(`Edge ${edge.id} cannot point an event to itself.`)
+  for (const event of records.events) {
+    if (!isText(event.title) || typeof event.description !== 'string') errors.push(`Event ${String(event.id)} needs a title and description.`)
+    if (!Array.isArray(event.characterIds)) errors.push(`Event ${String(event.id)} characterIds must be an array.`)
+    else for (const id of event.characterIds) if (!isText(id) || !characterIds.has(id)) errors.push(`Event ${String(event.id)} references missing character ${String(id)}.`)
+  }
+  for (const occurrence of records.occurrences) {
+    if (!eventIds.has(String(occurrence.eventId))) errors.push(`Occurrence ${String(occurrence.id)} references missing event ${String(occurrence.eventId)}.`)
+    if (!worldIds.has(String(occurrence.worldId))) errors.push(`Occurrence ${String(occurrence.id)} references missing world ${String(occurrence.worldId)}.`)
+    if (!['none', 'mild', 'major'].includes(String(occurrence.spoiler))) errors.push(`Occurrence ${String(occurrence.id)} has an invalid spoiler scope.`)
+    if (occurrence.uncertainty !== undefined && typeof occurrence.uncertainty !== 'string') errors.push(`Occurrence ${String(occurrence.id)} has invalid uncertainty.`)
+    if (!Array.isArray(occurrence.sourceIds)) errors.push(`Occurrence ${String(occurrence.id)} sourceIds must be an array.`)
+    else for (const id of occurrence.sourceIds) if (!isText(id) || !sourceIds.has(id)) errors.push(`Occurrence ${String(occurrence.id)} references missing source ${String(id)}.`)
+    validatePlacement(occurrence, occurrenceIds, errors)
+  }
+  for (const edge of records.edges) {
+    if (!occurrenceIds.has(String(edge.fromOccurrenceId))) errors.push(`Edge ${String(edge.id)} references missing occurrence ${String(edge.fromOccurrenceId)}.`)
+    if (!occurrenceIds.has(String(edge.toOccurrenceId))) errors.push(`Edge ${String(edge.id)} references missing occurrence ${String(edge.toOccurrenceId)}.`)
+    if (!['leads-to', 'branches-to', 'returns-to', 'related'].includes(String(edge.kind))) errors.push(`Edge ${String(edge.id)} has an invalid kind.`)
+    if (edge.fromOccurrenceId === edge.toOccurrenceId) errors.push(`Edge ${String(edge.id)} cannot point an occurrence to itself.`)
   }
   return errors
+}
+
+function validatePlacement(occurrence: RecordValue, occurrenceIds: Set<string>, errors: string[]) {
+  const placement = occurrence.placement
+  const prefix = `Occurrence ${String(occurrence.id)}`
+  if (!isRecord(placement) || !isText(placement.label)) { errors.push(`${prefix} has an invalid date placement.`); return }
+  if (placement.kind === 'exact') {
+    if (!isText(placement.value)) errors.push(`${prefix} needs a non-empty exact date value.`)
+  } else if (placement.kind === 'range') {
+    if (placement.start !== undefined && !isText(placement.start)) errors.push(`${prefix} has an invalid range start.`)
+    if (placement.end !== undefined && !isText(placement.end)) errors.push(`${prefix} has an invalid range end.`)
+    if (placement.start === undefined && placement.end === undefined) errors.push(`${prefix} needs at least one range bound.`)
+  } else if (placement.kind === 'relative') {
+    if (placement.after === undefined && placement.before === undefined) errors.push(`${prefix} needs a relative occurrence reference.`)
+    for (const key of ['after', 'before'] as const) {
+      const reference = placement[key]
+      if (reference !== undefined && (!isText(reference) || !occurrenceIds.has(reference))) errors.push(`${prefix} references missing occurrence ${String(reference)} in ${key}.`)
+      if (reference === occurrence.id) errors.push(`${prefix} cannot be relative to itself.`)
+    }
+  } else if (placement.kind === 'unknown') {
+    return
+  } else if (placement.kind === 'disputed') {
+    if (!Array.isArray(placement.alternatives) || placement.alternatives.length === 0 || placement.alternatives.some((item) => !isText(item))) errors.push(`${prefix} needs non-empty disputed date alternatives.`)
+  } else errors.push(`${prefix} has an invalid date placement kind.`)
 }

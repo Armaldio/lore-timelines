@@ -1,28 +1,31 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { universes } from './data/universes'
-import { validateUniverse, type Event } from './domain'
+import { validateUniverse, type Event, type Occurrence } from './domain'
 
-const selectedUniverseId = ref('donnie-darko')
-const selectedEventId = ref('school-fire')
+const selectedUniverseId = ref('dark-netflix')
+const selectedOccurrenceId = ref('dark-crossing-2019')
 const search = ref('')
 const spoilerScope = ref<'all' | 'mild' | 'none'>('all')
 const universe = computed(() => universes.find((item) => item.id === selectedUniverseId.value) ?? universes[0]!)
-const visibleEvents = computed(() => universe.value.events.filter((event) => {
+const eventFor = (occurrence: Occurrence) => universe.value.events.find((event) => event.id === occurrence.eventId)!
+const visibleOccurrences = computed(() => universe.value.occurrences.filter((occurrence) => {
+  const event = eventFor(occurrence)
   const matchesSearch = `${event.title} ${event.description}`.toLowerCase().includes(search.value.toLowerCase())
-  const matchesSpoiler = spoilerScope.value === 'all' || (spoilerScope.value === 'mild' && event.spoiler !== 'major') || (spoilerScope.value === 'none' && event.spoiler === 'none')
+  const matchesSpoiler = spoilerScope.value === 'all' || (spoilerScope.value === 'mild' && occurrence.spoiler !== 'major') || (spoilerScope.value === 'none' && occurrence.spoiler === 'none')
   return matchesSearch && matchesSpoiler
 }))
-const selectedEvent = computed(() => visibleEvents.value.find((item) => item.id === selectedEventId.value) ?? visibleEvents.value[0])
-const visibleEventIds = computed(() => new Set(visibleEvents.value.map((event) => event.id)))
-const visibleEdges = computed(() => universe.value.edges.filter((edge) => visibleEventIds.value.has(edge.fromEventId) && visibleEventIds.value.has(edge.toEventId)))
-function eventsInWorld(worldId: string) { return visibleEvents.value.filter((event) => event.worldId === worldId) }
-function edgesAt(event: Event) { return universe.value.edges.filter((edge) => edge.fromEventId === event.id) }
-function sourcesFor(event: Event) { return universe.value.sources.filter((source) => event.sourceIds.includes(source.id)) }
+const selectedOccurrence = computed(() => visibleOccurrences.value.find((item) => item.id === selectedOccurrenceId.value) ?? visibleOccurrences.value[0])
+const selectedEvent = computed(() => selectedOccurrence.value ? eventFor(selectedOccurrence.value) : undefined)
+const visibleOccurrenceIds = computed(() => new Set(visibleOccurrences.value.map((occurrence) => occurrence.id)))
+const visibleEdges = computed(() => universe.value.edges.filter((edge) => visibleOccurrenceIds.value.has(edge.fromOccurrenceId) && visibleOccurrenceIds.value.has(edge.toOccurrenceId)))
+function occurrencesInWorld(worldId: string) { return visibleOccurrences.value.filter((occurrence) => occurrence.worldId === worldId) }
+function occurrenceById(id: string) { return universe.value.occurrences.find((occurrence) => occurrence.id === id) }
+function sourcesFor(occurrence: Occurrence) { return universe.value.sources.filter((source) => occurrence.sourceIds.includes(source.id)) }
 function charactersFor(event: Event) { return universe.value.characters.filter((character) => event.characterIds.includes(character.id)) }
 function setUniverse(id: string) {
   selectedUniverseId.value = id
-  selectedEventId.value = universes.find((item) => item.id === id)?.events[0]?.id ?? ''
+  selectedOccurrenceId.value = universes.find((item) => item.id === id)?.occurrences[0]?.id ?? ''
 }
 const problems = computed(() => validateUniverse(universe.value))
 </script>
@@ -48,39 +51,38 @@ const problems = computed(() => validateUniverse(universe.value))
 
         <div v-if="problems.length" class="validation-banner" role="alert">Timeline data needs attention: {{ problems.join(' ') }}</div>
         <section v-for="world in universe.worlds" :key="world.id" :class="['lane', `tone-${world.tone}`]" :aria-label="`${world.name} timeline lane`">
-          <div class="lane-heading"><span class="lane-dot" aria-hidden="true"></span><div><h2>{{ world.name }}</h2><p>{{ world.summary }}</p></div><span class="lane-count">{{ eventsInWorld(world.id).length }} EVENTS</span></div>
+          <div class="lane-heading"><span class="lane-dot" aria-hidden="true"></span><div><h2>{{ world.name }}</h2><p>{{ world.summary }}</p></div><span class="lane-count">{{ occurrencesInWorld(world.id).length }} OCCURRENCES</span></div>
           <div class="event-track">
-            <template v-for="(event, index) in eventsInWorld(world.id)" :key="event.id">
-              <button :class="['event-card', { selected: event.id === selectedEvent?.id }]" @click="selectedEventId = event.id" :aria-pressed="event.id === selectedEvent?.id" :aria-label="`${event.title}, ${event.placement.label}`">
-                <span class="event-icon" aria-hidden="true">{{ event.spoiler === 'major' ? '✦' : '◇' }}</span>
-                <span class="event-copy"><strong>{{ event.title }}</strong><small>{{ event.placement.label }}</small></span>
-                <span v-if="event.spoiler === 'major'" class="spoiler-dot" aria-label="Major spoiler">!</span>
+            <template v-for="occurrence in occurrencesInWorld(world.id)" :key="occurrence.id">
+              <button :class="['event-card', { selected: occurrence.id === selectedOccurrence?.id }]" @click="selectedOccurrenceId = occurrence.id" :aria-pressed="occurrence.id === selectedOccurrence?.id" :aria-label="`${eventFor(occurrence).title}, ${occurrence.placement.label}`">
+                <span class="event-icon" aria-hidden="true">{{ occurrence.spoiler === 'major' ? '✦' : '◇' }}</span>
+                <span class="event-copy"><strong>{{ eventFor(occurrence).title }}</strong><small>{{ occurrence.placement.label }}</small></span>
+                <span v-if="occurrence.spoiler === 'major'" class="spoiler-dot" aria-label="Major spoiler">!</span>
               </button>
-              <div v-if="index < eventsInWorld(world.id).length - 1" class="track-link" aria-hidden="true"><span>⟶</span></div>
             </template>
-            <p v-if="!eventsInWorld(world.id).length" class="empty-lane">No events match the current filters.</p>
+            <p v-if="!occurrencesInWorld(world.id).length" class="empty-lane">No occurrences match the current filters.</p>
           </div>
         </section>
 
         <section class="connection-key" aria-label="Timeline connection legend">
-          <div><span class="key-arrow">⟶</span><span>Event sequence</span></div><div><span class="key-branch">⌒↘</span><span>Branch divergence</span></div><div><span class="key-return">⇢</span><span>Return / convergence</span></div>
+          <div><span class="key-arrow">⟶</span><span>Explicit relationship</span></div><div><span class="key-branch">⌒↘</span><span>Branch divergence</span></div><div><span class="key-return">⇢</span><span>Return / convergence</span></div>
         </section>
         <section v-if="visibleEdges.length" class="connections" aria-label="Cross-lane and event relationships">
           <h2>How events connect</h2>
           <div v-for="edge in visibleEdges" :key="edge.id" class="connection-row">
             <span class="connection-type" :class="edge.kind">{{ edge.kind === 'branches-to' ? 'Branch' : edge.kind === 'returns-to' ? 'Return' : edge.kind === 'leads-to' ? 'Leads to' : 'Related' }}</span>
-            <button @click="selectedEventId = edge.fromEventId">{{ universe.events.find((item) => item.id === edge.fromEventId)?.title }}</button><span class="connection-arrow" aria-hidden="true">→</span><button @click="selectedEventId = edge.toEventId">{{ universe.events.find((item) => item.id === edge.toEventId)?.title }}</button>
+            <button @click="selectedOccurrenceId = edge.fromOccurrenceId">{{ eventFor(occurrenceById(edge.fromOccurrenceId)!).title }} · {{ universe.worlds.find((item) => item.id === occurrenceById(edge.fromOccurrenceId)?.worldId)?.name }}</button><span class="connection-arrow" aria-hidden="true">→</span><button @click="selectedOccurrenceId = edge.toOccurrenceId">{{ eventFor(occurrenceById(edge.toOccurrenceId)!).title }} · {{ universe.worlds.find((item) => item.id === occurrenceById(edge.toOccurrenceId)?.worldId)?.name }}</button>
           </div>
         </section>
       </div>
 
-      <aside v-if="selectedEvent" class="detail-panel" aria-labelledby="detail-title">
-        <div class="panel-top"><span class="panel-kicker">EVENT DETAILS</span><span :class="['spoiler-tag', selectedEvent.spoiler]">{{ selectedEvent.spoiler === 'major' ? 'Major spoiler' : selectedEvent.spoiler === 'mild' ? 'Mild spoiler' : 'No spoiler' }}</span></div>
-        <div class="detail-art" aria-hidden="true"><span class="art-orbit">◌</span><span class="art-line"></span><span class="art-caption">{{ universe.title }}<br /><small>{{ universe.worlds.find((world) => world.id === selectedEvent.worldId)?.name }}</small></span></div>
-        <div class="detail-content"><span class="detail-world">{{ universe.worlds.find((world) => world.id === selectedEvent.worldId)?.name }}</span><h2 id="detail-title">{{ selectedEvent.title }}</h2><p class="detail-date"><span aria-hidden="true">◷</span>{{ selectedEvent.placement.label }} <small>{{ selectedEvent.placement.kind }} placement</small></p><p class="detail-description">{{ selectedEvent.description }}</p>
-          <p v-if="selectedEvent.uncertainty" class="uncertainty"><span aria-hidden="true">ⓘ</span>{{ selectedEvent.uncertainty }}</p>
+      <aside v-if="selectedEvent && selectedOccurrence" class="detail-panel" aria-labelledby="detail-title">
+        <div class="panel-top"><span class="panel-kicker">OCCURRENCE DETAILS</span><span :class="['spoiler-tag', selectedOccurrence.spoiler]">{{ selectedOccurrence.spoiler === 'major' ? 'Major spoiler' : selectedOccurrence.spoiler === 'mild' ? 'Mild spoiler' : 'No spoiler' }}</span></div>
+        <div class="detail-art" aria-hidden="true"><span class="art-orbit">◌</span><span class="art-line"></span><span class="art-caption">{{ universe.title }}<br /><small>{{ universe.worlds.find((world) => world.id === selectedOccurrence.worldId)?.name }}</small></span></div>
+        <div class="detail-content"><span class="detail-world">{{ universe.worlds.find((world) => world.id === selectedOccurrence.worldId)?.name }}</span><h2 id="detail-title">{{ selectedEvent.title }}</h2><p class="detail-date"><span aria-hidden="true">◷</span>{{ selectedOccurrence.placement.label }} <small>{{ selectedOccurrence.placement.kind }} placement</small></p><p class="detail-description">{{ selectedEvent.description }}</p>
+          <p v-if="selectedOccurrence.uncertainty" class="uncertainty"><span aria-hidden="true">ⓘ</span>{{ selectedOccurrence.uncertainty }}</p>
           <section class="detail-section"><h3>Characters</h3><div class="chips"><span v-for="character in charactersFor(selectedEvent)" :key="character.id" class="chip">{{ character.name }}</span><span v-if="!charactersFor(selectedEvent).length" class="muted">No characters linked</span></div></section>
-          <section class="detail-section"><h3>Sources</h3><div class="chips"><span v-for="source in sourcesFor(selectedEvent)" :key="source.id" class="chip source-chip">{{ source.title }}</span><span v-if="!sourcesFor(selectedEvent).length" class="muted">No source linked yet</span></div></section>
+          <section class="detail-section"><h3>Sources</h3><div class="chips"><span v-for="source in sourcesFor(selectedOccurrence)" :key="source.id" class="chip source-chip">{{ source.title }}</span><span v-if="!sourcesFor(selectedOccurrence).length" class="muted">No source linked yet</span></div></section>
         </div>
       </aside>
     </section>
