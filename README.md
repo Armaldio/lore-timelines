@@ -29,7 +29,18 @@ GitHub Pages is enabled for this public repository with **Build and deployment �
 
 Values are never inferred by the renderer. Use labels such as `32 BBY` if a chronology uses a fictional calendar; only add an exact value when the source supports it. Occurrence `spoiler` is scoped to a placement (`none`, `mild`, or `major`). `uncertainty` records an interpretive caveat. Edges (`leads-to`, `branches-to`, `returns-to`, `related`) express explicit graph relationships without assuming one universal sequence.
 
-The in-app validator rejects duplicate IDs, malformed placements, and broken continuity, world, character, source, event, occurrence, and temporal references. The Netflix *Dark* fixture is distinct from Donnie Darko; it demonstrates an event recurring in 2019 and 1986 lanes and an explicit branch edge. Donnie Darko demonstrates tangent-world branching and return edges. Star Wars demonstrates cross-era chronology. Back to the Future and Marvel Cinematic Universe are selectable renderer examples with explicitly unknown dates; they are not curated canon datasets.
+The in-app validator rejects duplicate IDs, malformed placements, and broken continuity, world, character, source, event, occurrence, and temporal references. The Netflix *Dark* fixture is distinct from Donnie Darko; it demonstrates an event recurring in 2019 and 1986 lanes and an explicit branch edge. Donnie Darko demonstrates tangent-world branching and return edges. Star Wars demonstrates cross-era chronology. Back to the Future and the Marvel Cinematic Universe are curated datasets with explicit alternate-history and multiverse structures.
+
+## Using the app
+
+- `#/` lists the five universes; `#/u/<universe>?view=timeline|graph&o=<occurrence>` is a shareable link to a universe, view and selected event.
+- **Spoiler policy:** each universe remembers its level for the browser session (`sessionStorage`). The default hides `major` spoilers; `none` shows only spoiler-free events; `all` is an explicit opt-in. Hidden events are removed from search results, graph nodes, linked-event lists, tooltips and keyboard focus, and a shared link to a hidden event falls back to the first visible one.
+- **Timeline:** one fixed grid for every universe (`src/layout.ts`). Lanes are worlds, eras or histories; cards follow story order inside a lane and may share a column with the event they branch from. Spacing is narrative order, **not** a scaled calendar, and lanes never share one universal date axis. Dashed cards and the `≈ → ? ≠` marks flag range, relative, unknown and disputed placements. Zoom with the buttons, `+`/`-` or Ctrl+wheel, pan by dragging or scrolling, and move between events with the arrow keys.
+- **Relationships:** character rows with event nodes at their timeline column, built only from event participation and declared edges (`src/graph.ts`), with relationship-type and character filters and a text version of the same data.
+
+## Datasets
+
+`src/data/{dark,star-wars,donnie-darko,back-to-the-future,mcu}.ts` hold 15–25 curated story events each, every occurrence with a source, a deliberate spoiler scope and, for anything but an exact date, an `uncertainty` note. `tests/data.test.ts` enforces these rules. See `docs/VERIFICATION.md` for the verification evidence and known limitations.
 
 ## Extension
 
