@@ -45,7 +45,7 @@ export const donnieDarko: Universe = {
   ],
   occurrences: [
     { id: 'frank-wakes-donnie-primary', eventId: 'frank-wakes-donnie', worldId: 'primary', placement: { kind: 'exact', label: 'October 2, 1988 (night)', value: '1988-10-02' }, spoiler: 'none', uncertainty: 'Title card gives the date October 2, 1988; the exact hour is not relied on. The 28:06:42:12 countdown is stated by Frank in the film; the end date is not otherwise given exactly.', sourceIds: ['film-theatrical', 'film-directors-cut'] },
-    { id: 'donnie-death-primary', eventId: 'donnie-death', worldId: 'primary', placement: { kind: 'relative', label: 'After the tangent ends (around the end of the countdown)', after: 'portal-and-collapse-tangent' }, spoiler: 'major', uncertainty: 'Date not stated. That this death is the original Primary Universe event is the standard reading of the theatrical cut; the explanation is spelled out in the director’s cut and the Philosophy of Time Travel pages.', sourceIds: ['film-theatrical', 'film-directors-cut'] },
+    { id: 'donnie-death-primary', eventId: 'donnie-death', worldId: 'primary', placement: { kind: 'relative', label: 'Night of October 2, 1988 (Primary Universe)', after: 'frank-wakes-donnie-primary' }, spoiler: 'major', uncertainty: 'The loop: in the Primary Universe Donnie dies on the night the tangent opens, and the tangent’s collapse returns to that moment. The film shows the date only for the start; reading the ending as a closed loop is the standard interpretation of the theatrical cut and is spelled out in the director’s cut and the Philosophy of Time Travel pages.', sourceIds: ['film-theatrical', 'film-directors-cut', 'book-time-travel'] },
     { id: 'morning-after-primary', eventId: 'morning-after', worldId: 'primary', placement: { kind: 'relative', label: 'Morning after Donnie’s death', after: 'donnie-death-primary' }, spoiler: 'major', uncertainty: 'The film does not display a date for this scene.', sourceIds: ['film-theatrical', 'film-directors-cut'] },
 
     { id: 'engine-crash-tangent', eventId: 'engine-crash', worldId: 'tangent', placement: { kind: 'relative', label: 'Night of October 2, 1988', after: 'frank-wakes-donnie-primary' }, spoiler: 'none', uncertainty: 'Placed on the night of October 2 per the film’s opening. The theatrical cut does not explain why the tangent opens; the idea that the engine is the Artifact belongs to the director’s cut and the book.', sourceIds: ['film-theatrical', 'film-directors-cut'] },
@@ -78,7 +78,8 @@ export const donnieDarko: Universe = {
     { id: 'e-11', fromOccurrenceId: 'gretchen-death-tangent', toOccurrenceId: 'frank-death-tangent', kind: 'leads-to' },
     { id: 'e-12', fromOccurrenceId: 'frank-death-tangent', toOccurrenceId: 'plane-engine-tangent', kind: 'related' },
     { id: 'e-13', fromOccurrenceId: 'plane-engine-tangent', toOccurrenceId: 'portal-and-collapse-tangent', kind: 'leads-to' },
-    { id: 'e-return', fromOccurrenceId: 'portal-and-collapse-tangent', toOccurrenceId: 'donnie-death-primary', kind: 'returns-to' },
+    { id: 'e-primary-death', fromOccurrenceId: 'frank-wakes-donnie-primary', toOccurrenceId: 'donnie-death-primary', kind: 'leads-to' },
+    { id: 'e-return', fromOccurrenceId: 'portal-and-collapse-tangent', toOccurrenceId: 'donnie-death-primary', kind: 'returns-to', loop: true },
     { id: 'e-14', fromOccurrenceId: 'donnie-death-primary', toOccurrenceId: 'morning-after-primary', kind: 'leads-to' },
     { id: 'e-rel-engine', fromOccurrenceId: 'engine-crash-tangent', toOccurrenceId: 'donnie-death-primary', kind: 'related' },
   ],

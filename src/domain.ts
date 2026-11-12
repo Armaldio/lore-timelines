@@ -14,7 +14,7 @@ export interface Occurrence {
   id: string; eventId: string; worldId: string; placement: DatePlacement
   spoiler: 'none' | 'mild' | 'major'; uncertainty?: string; sourceIds: string[]
 }
-export interface Edge { id: string; fromOccurrenceId: string; toOccurrenceId: string; kind: 'leads-to' | 'branches-to' | 'returns-to' | 'related' }
+export interface Edge { id: string; fromOccurrenceId: string; toOccurrenceId: string; kind: 'leads-to' | 'branches-to' | 'returns-to' | 'related'; loop?: true }
 export interface Universe {
   id: string; title: string; subtitle: string; description: string
   continuities: Continuity[]; worlds: World[]; characters: Character[]; sources: Source[]
@@ -99,6 +99,7 @@ export function validateUniverse(value: unknown): string[] {
     if (!occurrenceIds.has(String(edge.fromOccurrenceId))) errors.push(`Edge ${String(edge.id)} references missing occurrence ${String(edge.fromOccurrenceId)}.`)
     if (!occurrenceIds.has(String(edge.toOccurrenceId))) errors.push(`Edge ${String(edge.id)} references missing occurrence ${String(edge.toOccurrenceId)}.`)
     if (!['leads-to', 'branches-to', 'returns-to', 'related'].includes(String(edge.kind))) errors.push(`Edge ${String(edge.id)} has an invalid kind.`)
+    if (edge.loop !== undefined && (edge.loop !== true || edge.kind !== 'returns-to')) errors.push(`Edge ${String(edge.id)} may only set loop: true on a returns-to edge.`)
     if (edge.fromOccurrenceId === edge.toOccurrenceId) errors.push(`Edge ${String(edge.id)} cannot point an occurrence to itself.`)
   }
   return errors

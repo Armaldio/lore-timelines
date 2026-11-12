@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import type { Occurrence, Universe } from '../domain'
-import { CARD_H, CARD_W, computeLayout, edgePath } from '../layout'
+import { CARD_H, CARD_W, computeLayout, edgeMidpoint, edgePath, isLoopClosure } from '../layout'
 import { isHidden, type SpoilerLevel } from '../spoilers'
 import { iconPath } from '../icons'
 
@@ -34,8 +34,8 @@ const markerText = (o: Occurrence) => ({ exact: '', range: 'Date range', relativ
 const visibleIds = computed(() => new Set(props.universe.occurrences.filter((o) => !hidden(o)).map((o) => o.id)))
 const drawnEdges = computed(() => props.universe.edges
   .filter((e) => visibleIds.value.has(e.fromOccurrenceId) && visibleIds.value.has(e.toOccurrenceId))
-  .map((edge) => ({ edge, d: edgePath(layout.value, edge) }))
-  .filter((item): item is { edge: typeof item.edge; d: string } => item.d !== undefined))
+  .map((edge) => ({ edge, d: edgePath(layout.value, edge), loop: isLoopClosure(layout.value, edge), mid: edgeMidpoint(layout.value, edge) }))
+  .filter((item): item is { edge: typeof item.edge; d: string; loop: boolean; mid: { x: number; y: number } } => item.d !== undefined && item.mid !== undefined))
 const countIn = (worldId: string) => props.universe.occurrences.filter((o) => o.worldId === worldId && !hidden(o)).length
 const totalIn = (worldId: string) => props.universe.occurrences.filter((o) => o.worldId === worldId).length
 
@@ -96,7 +96,7 @@ const tabStop = computed(() => (visibleIds.value.has(props.selectedId) ? props.s
           </section>
           <svg class="h-edges" :width="layout.width" :height="layout.height" aria-hidden="true">
             <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></marker></defs>
-            <path v-for="item in drawnEdges" :key="item.edge.id" :d="item.d" :class="['h-edge', item.edge.kind]" marker-end="url(#arrow)" />
+            <template v-for="item in drawnEdges" :key="item.edge.id"><path :d="item.d" :class="['h-edge', item.edge.kind, { loop: item.loop }]" marker-end="url(#arrow)"><title>{{ item.loop ? 'Loop: returns to a moment already visited' : item.edge.kind }}</title></path><text v-if="item.loop" :x="item.mid.x" :y="item.mid.y" class="h-loop-label">↺ loop</text></template>
           </svg>
           <template v-for="o in universe.occurrences" :key="o.id">
             <button v-if="!hidden(o)" :data-occ="o.id" :tabindex="o.id === tabStop ? 0 : -1" :class="['h-card', `tone-${toneOf(o.worldId)}`, { selected: o.id === selectedId, dim: dimmed(o), approx: o.placement.kind !== 'exact' }]" :style="{ left: `${layout.nodes[o.id]!.x}px`, top: `${layout.nodes[o.id]!.y}px`, width: `${CARD_W}px`, height: `${CARD_H}px` }" :aria-pressed="o.id === selectedId" :aria-label="`${eventOf(o).title}, ${o.placement.label}${markerText(o) ? ` (${markerText(o)})` : ''}`" :title="`${eventOf(o).title} · ${o.placement.label}`" @click="emit('select', o.id)" @keydown="onKey($event, o)">
@@ -112,6 +112,7 @@ const tabStop = computed(() => (visibleIds.value.has(props.selectedId) ? props.s
       <div><svg width="34" height="10" aria-hidden="true"><path d="M1 5 H30" class="h-edge leads-to" marker-end="url(#arrow)" /></svg><span>Timeline progress</span></div>
       <div><svg width="34" height="14" aria-hidden="true"><path d="M1 12 C14 12 10 2 30 2" class="h-edge branches-to" marker-end="url(#arrow)" /></svg><span>Branch (divergence)</span></div>
       <div><svg width="34" height="10" aria-hidden="true"><path d="M1 5 H30" class="h-edge returns-to" marker-end="url(#arrow)" /></svg><span>Return (convergence)</span></div>
+      <div><span class="h-loop-label static">↺ loop</span><span>Return to a moment already visited</span></div>
       <div><svg width="34" height="10" aria-hidden="true"><path d="M1 5 H30" class="h-edge related" marker-end="url(#arrow)" /></svg><span>Related</span></div>
       <div class="key-marks"><i class="h-mark">≈</i> range <i class="h-mark">→</i> relative <i class="h-mark">?</i> unknown <i class="h-mark">≠</i> disputed</div>
     </section>

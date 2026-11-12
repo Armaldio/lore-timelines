@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { validateUniverse } from '../src/domain.ts'
 import { universes } from '../src/data/universes.ts'
+import { computeLayout, isLoopClosure } from '../src/layout.ts'
 
 const byId = (id: string) => universes.find((u) => u.id === id)!
 const kindsOf = (id: string) => new Set(byId(id).edges.map((e) => e.kind))
@@ -44,6 +45,17 @@ test('Donnie Darko: Primary and Tangent universes are linked by a branch and a r
   const ids = byId('donnie-darko').worlds.map((w) => w.id)
   assert.ok(ids.includes('primary') && ids.includes('tangent'))
   assert.ok(kindsOf('donnie-darko').has('branches-to') && kindsOf('donnie-darko').has('returns-to'))
+})
+
+test('Donnie Darko: the loop is explicit — the collapse returns to the night the tangent began', () => {
+  const dd = byId('donnie-darko')
+  const layout = computeLayout(dd)
+  const closing = dd.edges.filter((e) => isLoopClosure(layout, e))
+  assert.equal(closing.length, 1)
+  const [edge] = closing
+  assert.equal(edge!.toOccurrenceId, 'donnie-death-primary')
+  const start = layout.nodes['frank-wakes-donnie-primary']!, death = layout.nodes['donnie-death-primary']!, collapse = layout.nodes[edge!.fromOccurrenceId]!
+  assert.ok(death.col <= start.col + 1 && death.col < collapse.col)
 })
 
 test('Back to the Future: key years appear and histories branch and converge', () => {

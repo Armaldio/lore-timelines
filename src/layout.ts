@@ -22,7 +22,6 @@ export interface Layout { width: number; height: number; lanes: LaneBox[]; nodes
  */
 export function computeColumns(universe: Universe): Record<string, number> {
   const laneOf = new Map(universe.occurrences.map((o) => [o.id, o.worldId]))
-  const col: Record<string, number> = Object.fromEntries(universe.occurrences.map((o) => [o.id, 0]))
   const previousInLane = new Map<string, string>()
   const lastSeen = new Map<string, string>()
   for (const o of universe.occurrences) {
@@ -30,22 +29,29 @@ export function computeColumns(universe: Universe): Record<string, number> {
     if (prev) previousInLane.set(o.id, prev)
     lastSeen.set(o.worldId, o.id)
   }
-  for (let pass = 0; pass <= universe.occurrences.length; pass++) {
-    let changed = false
-    // Capped so a cyclic edge set (e.g. a time loop) can never push a column past the occurrence count.
-    const raise = (id: string, min: number) => { const target = Math.min(min, universe.occurrences.length); if ((col[id] ?? 0) < target) { col[id] = target; changed = true } }
-    for (const o of universe.occurrences) {
-      const prev = previousInLane.get(o.id)
-      if (prev) raise(o.id, col[prev]! + 1)
+  const solve = (edges: Edge[]) => {
+    const col: Record<string, number> = Object.fromEntries(universe.occurrences.map((o) => [o.id, 0]))
+    for (let pass = 0; pass <= universe.occurrences.length; pass++) {
+      let changed = false
+      // Capped so a cyclic edge set can never push a column past the occurrence count.
+      const raise = (id: string, min: number) => { const target = Math.min(min, universe.occurrences.length); if ((col[id] ?? 0) < target) { col[id] = target; changed = true } }
+      for (const o of universe.occurrences) {
+        const prev = previousInLane.get(o.id)
+        if (prev) raise(o.id, col[prev]! + 1)
+      }
+      for (const e of edges) {
+        if (!(e.fromOccurrenceId in col) || !(e.toOccurrenceId in col)) continue
+        const sameLane = laneOf.get(e.fromOccurrenceId) === laneOf.get(e.toOccurrenceId)
+        raise(e.toOccurrenceId, col[e.fromOccurrenceId]! + (sameLane ? 1 : 0))
+      }
+      if (!changed) break
     }
-    for (const e of universe.edges) {
-      if (!(e.fromOccurrenceId in col) || !(e.toOccurrenceId in col)) continue
-      const sameLane = laneOf.get(e.fromOccurrenceId) === laneOf.get(e.toOccurrenceId)
-      raise(e.toOccurrenceId, col[e.fromOccurrenceId]! + (sameLane ? 1 : 0))
-    }
-    if (!changed) break
+    return col
   }
-  return col
+  // Edges flagged `loop` return to a moment already visited (the Donnie Darko tangent collapsing back onto
+  // the night it began); they must not drag their target to the right, so they carry no column constraint.
+  const edges = universe.edges.filter((e) => !e.loop)
+  return solve(edges)
 }
 
 export function computeLayout(universe: Universe): Layout {
@@ -69,6 +75,12 @@ export function edgePath(layout: Layout, edge: Edge): string | undefined {
   const a = layout.nodes[edge.fromOccurrenceId]
   const b = layout.nodes[edge.toOccurrenceId]
   if (!a || !b) return undefined
+  if (a.laneIndex === b.laneIndex && b.x <= a.x) {
+    // Backward edge in one lane: arc over the cards instead of cutting through them.
+    const x1 = a.x + CARD_W / 2, x2 = b.x + CARD_W / 2, y = a.y
+    const lift = 34
+    return `M ${x1} ${y} C ${x1} ${y - lift} ${x2} ${y - lift} ${x2} ${y - 3}`
+  }
   if (a.laneIndex === b.laneIndex) {
     const y = a.y + CARD_H / 2
     return `M ${a.x + CARD_W} ${y} L ${b.x - 3} ${y}`
@@ -79,4 +91,16 @@ export function edgePath(layout: Layout, edge: Edge): string | undefined {
   const y2 = down ? b.y - 3 : b.y + CARD_H + 3
   const ym = (y1 + y2) / 2
   return x1 === x2 ? `M ${x1} ${y1} L ${x2} ${y2}` : `M ${x1} ${y1} C ${x1} ${ym} ${x2} ${ym} ${x2} ${y2}`
+}
+
+/** An edge explicitly flagged as a loop closure in the data. */
+export function isLoopClosure(layout: Layout, edge: Edge): boolean {
+  const a = layout.nodes[edge.fromOccurrenceId], b = layout.nodes[edge.toOccurrenceId]
+  return edge.loop === true && !!a && !!b
+}
+
+export function edgeMidpoint(layout: Layout, edge: Edge): { x: number; y: number } | undefined {
+  const a = layout.nodes[edge.fromOccurrenceId], b = layout.nodes[edge.toOccurrenceId]
+  if (!a || !b) return undefined
+  return { x: (a.x + b.x) / 2 + CARD_W / 2, y: a.laneIndex === b.laneIndex ? a.y - 30 : (a.y + b.y) / 2 + CARD_H / 2 }
 }
