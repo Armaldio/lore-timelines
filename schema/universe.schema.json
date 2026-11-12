@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lore Timelines Universe",
+  "type": "object",
+  "required": ["id", "title", "subtitle", "description", "continuities", "worlds", "characters", "sources", "events", "occurrences", "edges"],
+  "properties": {
+    "id": { "$ref": "#/$defs/id" }, "title": { "type": "string", "minLength": 1 },
+    "subtitle": { "type": "string" }, "description": { "type": "string" },
+    "continuities": { "type": "array", "items": { "$ref": "#/$defs/continuity" } },
+    "worlds": { "type": "array", "items": { "$ref": "#/$defs/world" } },
+    "characters": { "type": "array", "items": { "$ref": "#/$defs/character" } },
+    "sources": { "type": "array", "items": { "$ref": "#/$defs/source" } },
+    "events": { "type": "array", "items": { "$ref": "#/$defs/event" } },
+    "occurrences": { "type": "array", "items": { "$ref": "#/$defs/occurrence" } },
+    "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1 },
+    "continuity": { "type": "object", "required": ["id", "name", "summary"], "properties": { "id": { "$ref": "#/$defs/id" }, "name": { "type": "string", "minLength": 1 }, "summary": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+    "world": { "type": "object", "required": ["id", "continuityId", "name", "summary", "tone"], "properties": { "id": { "$ref": "#/$defs/id" }, "continuityId": { "$ref": "#/$defs/id" }, "name": { "type": "string", "minLength": 1 }, "summary": { "type": "string", "minLength": 1 }, "tone": { "enum": ["teal", "coral", "gold"] } }, "additionalProperties": false },
+    "character": { "type": "object", "required": ["id", "name"], "properties": { "id": { "$ref": "#/$defs/id" }, "name": { "type": "string", "minLength": 1 }, "description": { "type": "string" } }, "additionalProperties": false },
+    "source": { "type": "object", "required": ["id", "title", "kind"], "properties": { "id": { "$ref": "#/$defs/id" }, "title": { "type": "string", "minLength": 1 }, "kind": { "enum": ["film", "book", "episode", "reference"] }, "url": { "type": "string", "format": "uri", "pattern": "^https?://" } }, "additionalProperties": false },
+    "event": { "type": "object", "required": ["id", "title", "description", "characterIds"], "properties": { "id": { "$ref": "#/$defs/id" }, "title": { "type": "string", "minLength": 1 }, "description": { "type": "string" }, "characterIds": { "type": "array", "items": { "$ref": "#/$defs/id" } } }, "additionalProperties": false },
+    "placement": { "oneOf": [
+      { "type": "object", "required": ["kind", "label", "value"], "properties": { "kind": { "const": "exact" }, "label": { "type": "string", "minLength": 1 }, "value": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+      { "type": "object", "required": ["kind", "label"], "properties": { "kind": { "const": "range" }, "label": { "type": "string", "minLength": 1 }, "start": { "type": "string", "minLength": 1 }, "end": { "type": "string", "minLength": 1 } }, "anyOf": [{ "required": ["start"] }, { "required": ["end"] }], "additionalProperties": false },
+      { "type": "object", "required": ["kind", "label"], "properties": { "kind": { "const": "relative" }, "label": { "type": "string", "minLength": 1 }, "after": { "$ref": "#/$defs/id" }, "before": { "$ref": "#/$defs/id" } }, "anyOf": [{ "required": ["after"] }, { "required": ["before"] }], "additionalProperties": false },
+      { "type": "object", "required": ["kind", "label"], "properties": { "kind": { "const": "unknown" }, "label": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+      { "type": "object", "required": ["kind", "label", "alternatives"], "properties": { "kind": { "const": "disputed" }, "label": { "type": "string", "minLength": 1 }, "alternatives": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } } }, "additionalProperties": false }
+    ] },
+    "occurrence": { "type": "object", "required": ["id", "eventId", "worldId", "placement", "spoiler", "sourceIds"], "properties": { "id": { "$ref": "#/$defs/id" }, "eventId": { "$ref": "#/$defs/id" }, "worldId": { "$ref": "#/$defs/id" }, "placement": { "$ref": "#/$defs/placement" }, "spoiler": { "enum": ["none", "mild", "major"] }, "uncertainty": { "type": "string" }, "sourceIds": { "type": "array", "items": { "$ref": "#/$defs/id" } } }, "additionalProperties": false },
+    "edge": { "type": "object", "required": ["id", "fromOccurrenceId", "toOccurrenceId", "kind"], "properties": { "id": { "$ref": "#/$defs/id" }, "fromOccurrenceId": { "$ref": "#/$defs/id" }, "toOccurrenceId": { "$ref": "#/$defs/id" }, "kind": { "enum": ["leads-to", "branches-to", "returns-to", "related"] } }, "additionalProperties": false }
+  },
+  "additionalProperties": false
+}
