@@ -50,3 +50,10 @@ test('rejects a malformed event icon', () => {
   universe.events[0]!.icon = 42 as unknown as string
   assert.ok(validateUniverse(universe).some((error) => error.includes('invalid icon')))
 })
+
+test('loop may only flag a returns-to edge', () => {
+  const universe = structuredClone(universes.find((item) => item.id === 'donnie-darko')!) as Universe
+  const leads = universe.edges.find((edge) => edge.kind === 'leads-to')!
+  leads.loop = true
+  assert.ok(validateUniverse(universe).some((error) => error.includes('loop: true on a returns-to edge')))
+})

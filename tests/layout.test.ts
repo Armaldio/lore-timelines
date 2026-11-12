@@ -15,6 +15,7 @@ test('every universe lays out with unique card slots, ordered lanes and valid ed
     }
     const laneOf = new Map(universe.occurrences.map((o) => [o.id, o.worldId]))
     for (const edge of universe.edges) {
+      if (edge.loop) { assert.ok(edgePath(layout, edge), `${universe.title} ${edge.id}`); continue }
       const same = laneOf.get(edge.fromOccurrenceId) === laneOf.get(edge.toOccurrenceId)
       assert.ok(cols[edge.toOccurrenceId]! >= cols[edge.fromOccurrenceId]! + (same ? 1 : 0), `${universe.title} ${edge.id}`)
       assert.ok(edgePath(layout, edge), `${universe.title} ${edge.id}`)
