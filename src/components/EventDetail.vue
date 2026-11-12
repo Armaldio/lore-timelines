@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { edgeLabels, type Occurrence, type Universe } from '../domain'
 import { isHidden, type SpoilerLevel } from '../spoilers'
 import { iconPath } from '../icons'
+import { resolveTimes } from '../time'
 
 const props = defineProps<{ universe: Universe; occurrence: Occurrence; level: SpoilerLevel; view: 'timeline' | 'graph' }>()
 const emit = defineEmits<{ select: [id: string]; switchView: [view: 'timeline' | 'graph'] }>()
@@ -12,6 +13,8 @@ const world = computed(() => props.universe.worlds.find((w) => w.id === props.oc
 const characters = computed(() => props.universe.characters.filter((c) => event.value.characterIds.includes(c.id)))
 const sources = computed(() => props.universe.sources.filter((s) => props.occurrence.sourceIds.includes(s.id)))
 const placementKinds: Record<string, string> = { exact: 'Exact date', range: 'Date range', relative: 'Relative position', unknown: 'Date not established', disputed: 'Disputed date' }
+const basis = computed(() => resolveTimes(props.universe)[props.occurrence.id]?.basis ?? 'undated')
+const basisNote = { stated: '', inferred: 'Position on the time axis is inferred by the dataset, not stated by the work.', derived: 'Position on the time axis is derived from story order (one day after or before its anchor).', undated: 'The work gives no calendar date, so this sits in the “No established date” zone.' } as const
 const spoilerText: Record<string, string> = { none: 'No spoiler', mild: 'Mild spoiler', major: 'Major spoiler' }
 /** Linked events, minus anything the spoiler level hides — hidden titles never appear here. */
 const links = computed(() => props.universe.edges.flatMap((edge) => {
@@ -33,6 +36,7 @@ const links = computed(() => props.universe.edges.flatMap((edge) => {
       <span class="detail-world">{{ world?.name }}</span>
       <h2 id="detail-title"><svg class="detail-icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="iconPath(event.icon)" /></svg>{{ event.title }}</h2>
       <p class="detail-date"><span aria-hidden="true">▦</span>{{ occurrence.placement.label }} <small>{{ placementKinds[occurrence.placement.kind] }}</small></p>
+      <p v-if="basisNote[basis]" class="basis-note">{{ basisNote[basis] }}</p>
       <p v-if="occurrence.placement.kind === 'disputed'" class="alternatives">Competing readings: {{ occurrence.placement.alternatives.join(' · ') }}</p>
       <p class="detail-description">{{ event.description }}</p>
       <p v-if="occurrence.uncertainty" class="uncertainty"><span aria-hidden="true">ⓘ</span>{{ occurrence.uncertainty }}</p>

@@ -16,6 +16,7 @@ const edge = (from: string, to: string, kind: 'leads-to' | 'related' = 'leads-to
 
 export const starWars: Universe = {
   id: 'star-wars',
+  axis: { calendar: 'galactic' },
   title: 'Star Wars',
   subtitle: 'Republic, Empire and Resistance (Disney-era canon)',
   description: 'Key story events from official canon, arranged by era. Dates use BBY / ABY, counted from the Battle of Yavin.',

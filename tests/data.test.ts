@@ -49,13 +49,15 @@ test('Donnie Darko: Primary and Tangent universes are linked by a branch and a r
 
 test('Donnie Darko: the loop is explicit — the collapse returns to the night the tangent began', () => {
   const dd = byId('donnie-darko')
-  const layout = computeLayout(dd)
+  const layout = computeLayout(dd, 20_000)
   const closing = dd.edges.filter((e) => isLoopClosure(layout, e))
   assert.equal(closing.length, 1)
   const [edge] = closing
   assert.equal(edge!.toOccurrenceId, 'donnie-death-primary')
   const start = layout.nodes['frank-wakes-donnie-primary']!, death = layout.nodes['donnie-death-primary']!, collapse = layout.nodes[edge!.fromOccurrenceId]!
-  assert.ok(death.col <= start.col + 1 && death.col < collapse.col)
+  // The return lands on the night the tangent opened (same day on the axis) and is a long way back from the collapse.
+  assert.ok(Math.abs(death.x - start.x) < 1)
+  assert.ok(death.x < collapse.x)
 })
 
 test('Back to the Future: key years appear and histories branch and converge', () => {

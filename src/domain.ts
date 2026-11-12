@@ -1,3 +1,5 @@
+import { parseTime } from './time.ts'
+
 export type DatePlacement =
   | { kind: 'exact'; label: string; value: string }
   | { kind: 'range'; label: string; start?: string; end?: string }
@@ -5,6 +7,9 @@ export type DatePlacement =
   | { kind: 'unknown'; label: string }
   | { kind: 'disputed'; label: string; alternatives: string[] }
 
+export type Calendar = 'gregorian' | 'galactic'
+/** Where an occurrence sits on the time axis when its placement is only a label (see src/time.ts). */
+export interface When { start: string; end?: string }
 export interface Source { id: string; title: string; kind: 'film' | 'book' | 'episode' | 'reference'; url?: string }
 export interface Character { id: string; name: string; description?: string }
 export interface Continuity { id: string; name: string; summary: string }
@@ -13,10 +18,14 @@ export interface Event { id: string; title: string; description: string; charact
 export interface Occurrence {
   id: string; eventId: string; worldId: string; placement: DatePlacement
   spoiler: 'none' | 'mild' | 'major'; uncertainty?: string; sourceIds: string[]
+  /** Inferred axis position, for disputed, label-only or story-ordered placements. */
+  when?: When
 }
 export interface Edge { id: string; fromOccurrenceId: string; toOccurrenceId: string; kind: 'leads-to' | 'branches-to' | 'returns-to' | 'related'; loop?: true }
 export interface Universe {
   id: string; title: string; subtitle: string; description: string
+  /** 'gregorian' (default) or 'galactic' (negative years = BBY, positive = ABY). */
+  axis?: { calendar: Calendar }
   continuities: Continuity[]; worlds: World[]; characters: Character[]; sources: Source[]
   events: Event[]; occurrences: Occurrence[]; edges: Edge[]
 }
@@ -31,6 +40,8 @@ function idSet(items: unknown[]): Set<string> {
 export function validateUniverse(value: unknown): string[] {
   if (!isRecord(value)) return ['Universe must be an object.']
   const errors: string[] = []
+  const calendar: Calendar = isRecord(value.axis) && value.axis.calendar === 'galactic' ? 'galactic' : 'gregorian'
+  if (value.axis !== undefined && (!isRecord(value.axis) || !['gregorian', 'galactic'].includes(String(value.axis.calendar)))) errors.push('Universe axis calendar must be gregorian or galactic.')
   if (!isText(value.id)) errors.push('Universe needs a stable, non-empty id.')
   if (!isText(value.title)) errors.push('Universe needs a title.')
   if (typeof value.subtitle !== 'string' || typeof value.description !== 'string') errors.push('Universe needs a subtitle and description.')
@@ -94,6 +105,10 @@ export function validateUniverse(value: unknown): string[] {
     if (!Array.isArray(occurrence.sourceIds)) errors.push(`Occurrence ${String(occurrence.id)} sourceIds must be an array.`)
     else for (const id of occurrence.sourceIds) if (!isText(id) || !sourceIds.has(id)) errors.push(`Occurrence ${String(occurrence.id)} references missing source ${String(id)}.`)
     validatePlacement(occurrence, occurrenceIds, errors)
+    const when = occurrence.when
+    if (when !== undefined) {
+      if (!isRecord(when) || parseTime(when.start as string, calendar) === undefined || (when.end !== undefined && parseTime(when.end as string, calendar) === undefined)) errors.push(`Occurrence ${String(occurrence.id)} has an unparseable when.`)
+    }
   }
   for (const edge of records.edges) {
     if (!occurrenceIds.has(String(edge.fromOccurrenceId))) errors.push(`Edge ${String(edge.id)} references missing occurrence ${String(edge.fromOccurrenceId)}.`)

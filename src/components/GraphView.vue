@@ -14,7 +14,7 @@ const graph = computed(() => buildStoryGraph(props.universe, props.level, { kind
 // Character list for the filter ignores the character filter itself, so chips never vanish while selected.
 const everyone = computed(() => buildStoryGraph(props.universe, props.level).characters)
 
-const COL = 66, ROW = 38, HEAD = 230, LEFT = 150, LANE_NUDGE = 12
+const COL = 70, ROW = 40, HEAD = 250, LEFT = 200, LANE_NUDGE = 12
 const width = computed(() => LEFT + graph.value.columns * COL + 40)
 const height = computed(() => HEAD + graph.value.characters.length * ROW + 24)
 const rowY = (i: number) => HEAD + i * ROW + ROW / 2
@@ -59,7 +59,7 @@ const titleOf = (id: string) => nodeById.value.get(id)?.title ?? ''
           <line v-if="stem(n)" :x1="nodeX(n)" :x2="nodeX(n)" :y1="stem(n)!.top" :y2="stem(n)!.bottom" class="g-stem" />
           <g role="button" tabindex="0" :aria-label="`${n.title}. ${n.characterIds.length} participants. Select to open details.`" :aria-pressed="n.occurrenceId === selectedId" @click="emit('select', n.occurrenceId)" @keydown.enter.prevent="emit('select', n.occurrenceId)" @keydown.space.prevent="emit('select', n.occurrenceId)">
             <rect :x="nodeX(n) - 7" :y="HEAD - 7" width="14" height="14" rx="3" class="g-event" />
-            <text :x="nodeX(n) + 4" :y="HEAD - 16" class="g-title" :transform="`rotate(-58 ${nodeX(n) + 4} ${HEAD - 16})`">{{ n.title.length > 34 ? `${n.title.slice(0, 33)}…` : n.title }}</text>
+            <text :x="nodeX(n) + 4" :y="HEAD - 16" class="g-title" :transform="`rotate(-58 ${nodeX(n) + 4} ${HEAD - 16})`">{{ n.title.length > 40 ? `${n.title.slice(0, 39)}…` : n.title }}</text>
           </g>
           <circle v-for="id in n.characterIds" :key="id" :cx="nodeX(n)" :cy="rowY(rowIndex.get(id) ?? 0)" r="5" class="g-dot" />
         </g>
