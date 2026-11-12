@@ -11,6 +11,12 @@ npm run dev
 
 Build a static bundle with `npm run build`; run schema checks with `npm test`.
 
+## Deploy to GitHub Pages
+
+The deployment workflow builds with Node.js 22 and publishes the Vite `dist/` artifact whenever `main` changes. You can also run it manually from the Actions tab; deployment is restricted to `main`. The project site URL is <https://armaldio.github.io/lore-timelines/>.
+
+The repository must have GitHub Pages enabled with **Build and deployment → Source → GitHub Actions**. GitHub currently reports that the account plan does not support Pages for this private repository. The workflow and Vite project base are prepared, but deployment will remain unavailable until the account plan supports Pages; the repository visibility is unchanged.
+
 ## Data model
 
 `schema/universe.schema.json` defines the canonical JSON shape, and `src/domain.ts` mirrors it with TypeScript types and cross-reference validation. A universe contains stable-ID `continuities`, `worlds`, `characters`, `sources`, `events`, `occurrences`, and explicit `edges`. Worlds are timeline lanes within a continuity. Events describe what happened; occurrences place an event in a world and carry its temporal placement, spoiler scope, sources, and uncertainty. One event may have multiple occurrences. Edges connect occurrence IDs so the interface shows only declared relationships.
