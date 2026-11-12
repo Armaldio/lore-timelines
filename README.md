@@ -15,7 +15,7 @@ Build a static bundle with `npm run build`; run schema checks with `npm test`.
 
 The deployment workflow builds with Node.js 22 and publishes the Vite `dist/` artifact whenever `main` changes. You can also run it manually from the Actions tab; deployment is restricted to `main`. The project site URL is <https://armaldio.github.io/lore-timelines/>.
 
-The repository must have GitHub Pages enabled with **Build and deployment → Source → GitHub Actions**. GitHub currently reports that the account plan does not support Pages for this private repository. The workflow and Vite project base are prepared, but deployment will remain unavailable until the account plan supports Pages; the repository visibility is unchanged.
+GitHub Pages is enabled for this public repository with **Build and deployment → Source → GitHub Actions**. Once the deployment workflow is on `main`, pushes and manual runs from `main` publish to the project site URL above.
 
 ## Data model
 
