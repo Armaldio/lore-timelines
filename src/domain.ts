@@ -9,7 +9,7 @@ export interface Source { id: string; title: string; kind: 'film' | 'book' | 'ep
 export interface Character { id: string; name: string; description?: string }
 export interface Continuity { id: string; name: string; summary: string }
 export interface World { id: string; continuityId: string; name: string; summary: string; tone: 'teal' | 'coral' | 'gold' }
-export interface Event { id: string; title: string; description: string; characterIds: string[] }
+export interface Event { id: string; title: string; description: string; characterIds: string[]; icon?: string }
 export interface Occurrence {
   id: string; eventId: string; worldId: string; placement: DatePlacement
   spoiler: 'none' | 'mild' | 'major'; uncertainty?: string; sourceIds: string[]
@@ -82,6 +82,7 @@ export function validateUniverse(value: unknown): string[] {
   }
   for (const event of records.events) {
     if (!isText(event.title) || typeof event.description !== 'string') errors.push(`Event ${String(event.id)} needs a title and description.`)
+    if (event.icon !== undefined && !isText(event.icon)) errors.push(`Event ${String(event.id)} has an invalid icon.`)
     if (!Array.isArray(event.characterIds)) errors.push(`Event ${String(event.id)} characterIds must be an array.`)
     else for (const id of event.characterIds) if (!isText(id) || !characterIds.has(id)) errors.push(`Event ${String(event.id)} references missing character ${String(id)}.`)
   }

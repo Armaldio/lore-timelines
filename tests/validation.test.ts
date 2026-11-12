@@ -52,3 +52,9 @@ test('rejects duplicate IDs and malformed nested records without throwing', () =
   const malformed = { ...duplicate, events: [null] } as unknown
   assert.ok(validateUniverse(malformed).some((error) => error.includes('stable, non-empty id')))
 })
+
+test('rejects a malformed event icon', () => {
+  const universe = structuredClone(universes.find((item) => item.id === 'donnie-darko')!) as Universe
+  universe.events[0]!.icon = 42 as unknown as string
+  assert.ok(validateUniverse(universe).some((error) => error.includes('invalid icon')))
+})
