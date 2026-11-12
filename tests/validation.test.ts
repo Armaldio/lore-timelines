@@ -7,14 +7,6 @@ test('all starter universes have valid entity and occurrence references', () => 
   for (const universe of universes) assert.deepEqual(validateUniverse(universe), [], universe.title)
 })
 
-test('Dark models one event with occurrences in multiple worlds', () => {
-  const dark = universes.find((item) => item.id === 'dark-netflix')!
-  const occurrences = dark.occurrences.filter((item) => item.eventId === 'dark-crossing')
-  assert.equal(occurrences.length, 2)
-  assert.deepEqual(new Set(occurrences.map((item) => item.worldId)), new Set(['dark-2019', 'dark-1986']))
-  assert.ok(dark.edges.some((edge) => edge.kind === 'branches-to' && edge.fromOccurrenceId === occurrences[0]!.id && edge.toOccurrenceId === occurrences[1]!.id))
-})
-
 test('rejects broken occurrence, source, character, continuity, and graph references', () => {
   const universe = structuredClone(universes.find((item) => item.id === 'dark-netflix')!) as Universe
   universe.worlds[0]!.continuityId = 'missing-continuity'

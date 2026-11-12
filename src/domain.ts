@@ -127,3 +127,7 @@ function validatePlacement(occurrence: RecordValue, occurrenceIds: Set<string>, 
     if (!Array.isArray(placement.alternatives) || placement.alternatives.length === 0 || placement.alternatives.some((item) => !isText(item))) errors.push(`${prefix} needs non-empty disputed date alternatives.`)
   } else errors.push(`${prefix} has an invalid date placement kind.`)
 }
+
+export type EdgeKind = Edge['kind']
+export const edgeKinds: EdgeKind[] = ['leads-to', 'branches-to', 'returns-to', 'related']
+export const edgeLabels: Record<EdgeKind, string> = { 'leads-to': 'Leads to', 'branches-to': 'Branches to', 'returns-to': 'Returns to', related: 'Related to' }

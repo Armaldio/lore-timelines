@@ -32,7 +32,8 @@ export function computeColumns(universe: Universe): Record<string, number> {
   }
   for (let pass = 0; pass <= universe.occurrences.length; pass++) {
     let changed = false
-    const raise = (id: string, min: number) => { if ((col[id] ?? 0) < min) { col[id] = min; changed = true } }
+    // Capped so a cyclic edge set (e.g. a time loop) can never push a column past the occurrence count.
+    const raise = (id: string, min: number) => { const target = Math.min(min, universe.occurrences.length); if ((col[id] ?? 0) < target) { col[id] = target; changed = true } }
     for (const o of universe.occurrences) {
       const prev = previousInLane.get(o.id)
       if (prev) raise(o.id, col[prev]! + 1)

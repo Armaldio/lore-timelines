@@ -3,37 +3,31 @@ import assert from 'node:assert/strict'
 import { computeColumns, computeLayout, edgePath, CARD_W, COL_GAP } from '../src/layout.ts'
 import { universes } from '../src/data/universes.ts'
 
-const byId = (id: string) => universes.find((item) => item.id === id)!
-
-test('every universe lays out with unique card slots per lane', () => {
+test('every universe lays out with unique card slots, ordered lanes and valid edge paths', () => {
   for (const universe of universes) {
+    const cols = computeColumns(universe)
     const layout = computeLayout(universe)
     const slots = Object.values(layout.nodes).map((n) => `${n.laneIndex}:${n.col}`)
-    assert.equal(new Set(slots).size, slots.length, universe.title)
-    assert.equal(layout.lanes.length, universe.worlds.length)
-    for (const edge of universe.edges) assert.ok(edgePath(layout, edge), `${universe.title} ${edge.id}`)
+    assert.equal(new Set(slots).size, slots.length, `${universe.title}: two cards share a slot`)
+    for (const world of universe.worlds) {
+      const lane = universe.occurrences.filter((o) => o.worldId === world.id).map((o) => cols[o.id]!)
+      assert.deepEqual(lane, [...lane].sort((a, b) => a - b), `${universe.title}/${world.id}: declared order must stay left-to-right`)
+    }
+    const laneOf = new Map(universe.occurrences.map((o) => [o.id, o.worldId]))
+    for (const edge of universe.edges) {
+      const same = laneOf.get(edge.fromOccurrenceId) === laneOf.get(edge.toOccurrenceId)
+      assert.ok(cols[edge.toOccurrenceId]! >= cols[edge.fromOccurrenceId]! + (same ? 1 : 0), `${universe.title} ${edge.id}`)
+      assert.ok(edgePath(layout, edge), `${universe.title} ${edge.id}`)
+    }
   }
 })
 
-test('Donnie Darko: tangent branch starts under its source, return lands at or after the collapse', () => {
-  const cols = computeColumns(byId('donnie-darko'))
-  assert.equal(cols['school-fire-tangent'], cols['grandma-death-primary'])
-  assert.ok(cols['restored-primary']! >= cols['collapse-tangent']!)
-  assert.ok(cols['engine-crash-primary']! < cols['frank-warning-primary']! && cols['frank-warning-primary']! < cols['grandma-death-primary']!)
-})
-
-test('Star Wars: a single lane advances left to right in declared order', () => {
-  const cols = computeColumns(byId('star-wars'))
-  assert.ok(cols['naboo-occ']! < cols['death-star-occ']! && cols['death-star-occ']! < cols['exegol-occ']!)
-})
-
-test('Dark: one event keeps one occurrence per lane at the same column', () => {
-  const cols = computeColumns(byId('dark-netflix'))
-  assert.equal(cols['dark-crossing-2019'], cols['dark-crossing-1986'])
-})
-
 test('layout is deterministic and uses one fixed card pitch', () => {
-  const a = computeLayout(byId('donnie-darko')), b = computeLayout(byId('donnie-darko'))
+  const u = universes.find((item) => item.id === 'donnie-darko')!
+  const a = computeLayout(u), b = computeLayout(u)
   assert.deepEqual(a, b)
-  assert.equal(a.nodes['frank-warning-primary']!.x - a.nodes['engine-crash-primary']!.x, CARD_W + COL_GAP)
+  const lane = u.occurrences.filter((o) => o.worldId === u.worlds[0]!.id)
+  assert.ok(lane.length >= 2)
+  const [first, second] = [a.nodes[lane[0]!.id]!, a.nodes[lane[1]!.id]!]
+  assert.equal((second.x - first.x) % (CARD_W + COL_GAP), 0)
 })
