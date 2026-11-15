@@ -5,6 +5,7 @@ import { axisExtent, BOTTOM_INSET, computeLayout, edgeMidpoint, edgePath, fitSca
 import { isHidden, type SpoilerLevel } from '../spoilers'
 import { iconPath } from '../icons'
 import { formatTime, pickTicks } from '../time'
+import { touchUi } from '../state'
 
 const props = defineProps<{ universe: Universe; level: SpoilerLevel; selectedId: string; query: string }>()
 const emit = defineEmits<{ select: [id: string] }>()
@@ -20,9 +21,11 @@ const autoFit = ref(true)
 
 const calendar = computed(() => props.universe.axis?.calendar ?? 'gregorian')
 const extent = computed(() => axisExtent(props.universe))
-const fit = computed(() => fitScale(props.universe, size.value.w))
+const fit = computed(() => fitScale(props.universe, size.value.w, touchUi.value))
 const MIN_MUL = 0.05
-const layout = computed(() => computeLayout(props.universe, px.value))
+// On touch screens spoiler-hidden cards take no space (they are counted in the lane header instead).
+const excluded = computed(() => (touchUi.value ? new Set(props.universe.occurrences.filter((o) => isHidden(props.level, o.spoiler)).map((o) => o.id)) : undefined))
+const layout = computed(() => computeLayout(props.universe, px.value, { touch: touchUi.value, exclude: excluded.value }))
 const zoomMul = computed(() => px.value / fit.value)
 const innerH = computed(() => Math.max(100, size.value.h - TOP_INSET - BOTTOM_INSET))
 
@@ -292,6 +295,7 @@ const ordered = computed(() => props.universe.occurrences.filter((o) => !hidden(
         <div><i class="h-mark">≈</i> range <i class="h-mark">→</i> relative <i class="h-mark">?</i> unknown <i class="h-mark">≠</i> disputed</div>
         <div>Dashed card: position inferred. Bar under a card: duration. Hatched zone: no established date.</div>
         <div>Drag to pan · scroll or pinch to zoom · arrows move between events</div>
+        <div class="legend-lanes lane-filter" role="group" aria-label="Highlight lanes"><button v-for="w in universe.worlds" :key="w.id" :class="['lane-chip', `tone-${w.tone}`, { off: mutedLanes.has(w.id) }]" :aria-pressed="!mutedLanes.has(w.id)" @click="toggleLane(w.id)">{{ w.name }}</button></div>
       </section>
     </div>
   </div>

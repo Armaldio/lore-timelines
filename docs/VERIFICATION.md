@@ -31,6 +31,9 @@ Limits that remain:
 
 **Inferred positions.** Where a placement is a label, a dispute or story order, the dataset's `when` (or one day after/before the anchor) positions it, and the card is dashed with an explanation in the detail panel. These inferred dates, notably the Donnie Darko October 1988 ranges and the 1885 and altered-1985 Back to the Future placements, are as unverified as the rest of the data. Hidden-by-spoiler cards still occupy their real position, so the axis extent and card positions can hint when an event happens, never what it is.
 
+## Mobile (emulated 390×780 touch, headless Chromium)
+Checked: no horizontal overflow; every visible control is ≥ 44 px tall except the brand mark's inner text inputs' wrappers (search is 44 px); the top bar collapses to a menu sheet (universes + app-wide spoiler radios, 48 px rows); tapping an event opens a bottom sheet (closable); spoiler-hidden cards take no space and fully hidden lanes collapse to their heading; lane chips move into the Legend panel; inputs are 16 px (no iOS focus zoom); safe-area insets respected. Desktop geometry is unchanged (test). **Not verified on a real device:** pinch zoom, momentum, iOS Safari quirks (address-bar resize, rubber-banding), screen readers.
+
 ## Known limitations
 - Lane filter chips dim lanes rather than remove them, to keep the layout stable.
 - Events in the same year (Star Wars, Dark) stack in rows until you zoom in; year-only dates span their whole year.
