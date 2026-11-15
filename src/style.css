@@ -212,3 +212,15 @@ button,a,select,label{touch-action:manipulation}
   .legend-lanes{display:flex;flex-wrap:wrap;gap:8px;padding-top:6px;border-top:1px solid #25434b}
   .brand-mark{width:44px;height:44px}
 }
+/* ===== Edges: calmer unless focused ===== */
+.h-edge-group.quiet{opacity:1}.h-edge-group.quiet .h-edge-halo{display:none}
+.h-edge-group.quiet .h-edge{stroke-width:1.8;opacity:.55}.h-edge-group.quiet .h-edge.branches-to{stroke-width:2}
+.h-edge-group.active .h-edge-halo{opacity:.95;stroke-width:7.5}
+/* ===== Touch navigation strip ===== */
+.navstrip{position:absolute;left:8px;right:8px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:30;display:flex;align-items:center;gap:8px;height:48px}
+.nav-step{flex:none;width:48px;height:48px;border-radius:24px;border:1px solid #2f4d54;background:rgba(7,18,23,.9);color:#e3efee;font:500 28px/1 var(--sans);cursor:pointer;backdrop-filter:blur(10px)}
+.nav-step:disabled{opacity:.35}
+.minimap{position:relative;flex:1;height:48px;border-radius:14px;background:rgba(7,18,23,.9);border:1px solid #2f4d54;touch-action:none;overflow:hidden;cursor:pointer}
+.map-dot{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#73e0dd;opacity:.85}
+.map-dot.tone-coral{background:#ff8574}.map-dot.tone-gold{background:#edce89}.map-dot.selected{width:11px;height:11px;margin:-5.5px 0 0 -5.5px;box-shadow:0 0 0 2px #fff}
+.map-view{position:absolute;top:2px;bottom:2px;border:2px solid #f0d9a0;border-radius:8px;background:#f0d9a022;pointer-events:none}

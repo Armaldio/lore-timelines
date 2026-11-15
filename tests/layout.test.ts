@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { axisExtent, computeLayout, edgePath, fitScale, xOfTime, timeOfX, PAD_X } from '../src/layout.ts'
+import { axisExtent, computeLayout, edgePath, fitScale, planEdges, xOfTime, timeOfX, PAD_X } from '../src/layout.ts'
 import { resolveTimes } from '../src/time.ts'
 import { universes } from '../src/data/universes.ts'
 
@@ -85,4 +85,27 @@ test('touch layout: chips are tap-sized and excluded (spoiler-hidden) cards take
   assert.ok(lean.height < full.height, 'hiding cards shortens the stage')
   for (const id of hidden) assert.equal(lean.nodes[id], undefined)
   assert.ok(Object.values(computeLayout(u, 5000).nodes).every((n) => n.h === 84 || n.h === 30), 'desktop geometry unchanged')
+})
+
+test('connections do not share one attachment point and avoid running behind cards in between', () => {
+  for (const universe of universes) {
+    const layout = computeLayout(universe, fitScale(universe, 1100) * 40)
+    const plans = planEdges(layout, universe.edges)
+    assert.equal(plans.length, universe.edges.length)
+    const seen = new Set<string>()
+    for (const p of plans) {
+      for (const key of [`${p.edge.fromOccurrenceId}|${p.mode === 'h' ? 'R' : p.down ? 'B' : 'T'}|${Math.round(p.mode === 'h' ? p.y1 : p.x1)}`]) {
+        assert.ok(!seen.has(key), `${universe.title}: two edges leave ${key} from the same point`)
+        seen.add(key)
+      }
+      if (p.mode === 'h' && p.channelY === undefined) {
+        const a = layout.nodes[p.edge.fromOccurrenceId]!, b = layout.nodes[p.edge.toOccurrenceId]!
+        const top = Math.min(p.y1, p.y2) - 3, bottom = Math.max(p.y1, p.y2) + 3
+        for (const n of Object.values(layout.nodes)) {
+          if (n.id === a.id || n.id === b.id) continue
+          assert.ok(!(p.x2 - p.x1 > 40 && n.x < p.x2 - 20 && n.x + n.w > p.x1 + 20 && n.y < bottom && n.y + n.h > top), `${universe.title}: ${p.edge.id} runs behind ${n.id}`)
+        }
+      }
+    }
+  }
 })

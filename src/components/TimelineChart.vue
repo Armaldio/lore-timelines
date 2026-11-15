@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Occurrence, Universe } from '../domain'
-import { axisExtent, BOTTOM_INSET, computeLayout, edgeMidpoint, edgePath, fitScale, isLoopClosure, MAX_PX_PER_YEAR, PAD_X, RULER_H, timeOfX, TOP_INSET, xOfTime } from '../layout'
+import { axisExtent, BOTTOM_INSET, computeLayout, fitScale, isLoopClosure, planEdges, planMidpoint, planPath, MAX_PX_PER_YEAR, PAD_X, RULER_H, timeOfX, TOP_INSET, xOfTime } from '../layout'
 import { isHidden, type SpoilerLevel } from '../spoilers'
 import { iconPath } from '../icons'
-import { formatTime, pickTicks } from '../time'
+import { formatTime, pickTicks, resolveTimes } from '../time'
 import { touchUi } from '../state'
 
 const props = defineProps<{ universe: Universe; level: SpoilerLevel; selectedId: string; query: string }>()
@@ -27,7 +27,9 @@ const MIN_MUL = 0.05
 const excluded = computed(() => (touchUi.value ? new Set(props.universe.occurrences.filter((o) => isHidden(props.level, o.spoiler)).map((o) => o.id)) : undefined))
 const layout = computed(() => computeLayout(props.universe, px.value, { touch: touchUi.value, exclude: excluded.value }))
 const zoomMul = computed(() => px.value / fit.value)
-const innerH = computed(() => Math.max(100, size.value.h - TOP_INSET - BOTTOM_INSET))
+// On touch screens a navigation strip (previous / overview / next) sits above the controls.
+const bottomInset = computed(() => (touchUi.value ? BOTTOM_INSET + 56 : BOTTOM_INSET))
+const innerH = computed(() => Math.max(100, size.value.h - TOP_INSET - bottomInset.value))
 
 function clampView() {
   const l = layout.value
@@ -119,21 +121,21 @@ const edgeWord: Record<string, string> = { 'leads-to': 'leads to', 'branches-to'
 const onScreen = (n: { x: number; w: number; y: number; h: number }) => n.x + n.w + 160 > vx.value && n.x - 160 < vx.value + size.value.w && n.y + n.h > vy.value - 40 && n.y < vy.value + innerH.value + 40
 const cards = computed(() => props.universe.occurrences.filter((o) => { const n = layout.value.nodes[o.id]; return n && onScreen(n) }))
 const shift = computed(() => ({ x: vx.value, y: vy.value - TOP_INSET, w: size.value.w }))
+// Attachment points are planned over every connection so none of them pile onto one spot.
+const plans = computed(() => planEdges(layout.value, props.universe.edges.filter((e) => visibleIds.value.has(e.fromOccurrenceId) && visibleIds.value.has(e.toOccurrenceId))))
 const drawnEdges = computed(() => {
   const l = layout.value, lo = vx.value - 200, hi = vx.value + size.value.w + 200
-  return props.universe.edges
-    .filter((e) => visibleIds.value.has(e.fromOccurrenceId) && visibleIds.value.has(e.toOccurrenceId))
-    .flatMap((edge) => {
-      const a = l.nodes[edge.fromOccurrenceId], b = l.nodes[edge.toOccurrenceId]
-      if (!a || !b) return []
-      const left = Math.min(a.x, b.x), right = Math.max(a.x + a.w, b.x + b.w)
-      if (right < lo || left > hi) return []
-      const active = edge.fromOccurrenceId === emphasised.value || edge.toOccurrenceId === emphasised.value
-      const loop = isLoopClosure(l, edge)
-      if (!showConnections.value && !active && !loop) return []
-      const d = edgePath(l, edge, shift.value), mid = edgeMidpoint(l, edge, shift.value)
-      return d && mid ? [{ edge, d, loop, mid, active }] : []
-    })
+  const out = plans.value.flatMap((plan) => {
+    const { edge } = plan
+    const left = Math.min(plan.x1, plan.x2) - 220, right = Math.max(plan.x1, plan.x2) + 220
+    if (right < lo || left > hi) return []
+    const active = edge.fromOccurrenceId === emphasised.value || edge.toOccurrenceId === emphasised.value
+    const loop = isLoopClosure(l, edge)
+    if (!showConnections.value && !active && !loop) return []
+    return [{ edge, d: planPath(plan, shift.value), loop, mid: planMidpoint(plan, shift.value), active }]
+  })
+  // The focused card's connections are drawn last, so they sit on top of everything else.
+  return out.sort((p, q) => Number(p.active) - Number(q.active))
 })
 const countIn = (worldId: string) => props.universe.occurrences.filter((o) => o.worldId === worldId && !hidden(o)).length
 const totalIn = (worldId: string) => props.universe.occurrences.filter((o) => o.worldId === worldId).length
@@ -170,6 +172,8 @@ function onKey(event: KeyboardEvent) {
 
 // ---- pointer: drag pans (cards and text included, nothing is selectable), two fingers pinch, wheel zooms
 const pointers = new Map<number, { x: number; y: number }>()
+let samples: { t: number; x: number; y: number }[] = []
+let lastTap: { t: number; x: number; y: number } | undefined
 let gesture: { moved: boolean; startX: number; startY: number; vx: number; vy: number; dist: number; px: number } | undefined
 let suppressClick = false
 const dragging = ref(false)
@@ -179,6 +183,7 @@ function pointerDown(e: PointerEvent) {
   if ((e.target as HTMLElement).closest('.hud, .no-pan')) return
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
   cancelAnimationFrame(anim)
+  samples = [{ t: performance.now(), x: e.clientX, y: e.clientY }]
   gesture = { moved: false, startX: e.clientX, startY: e.clientY, vx: vx.value, vy: vy.value, dist: spread(), px: px.value }
 }
 function pointerMove(e: PointerEvent) {
@@ -207,10 +212,39 @@ function pointerMove(e: PointerEvent) {
   vx.value = gesture.vx - dx; vy.value = gesture.vy - dy
   autoFit.value = false
   clampView()
+  samples.push({ t: performance.now(), x: e.clientX, y: e.clientY })
+  if (samples.length > 5) samples.shift()
+}
+// A flick keeps gliding and slows down, as native scrolling does.
+function fling() {
+  const a = samples[0], b = samples[samples.length - 1]
+  if (!a || !b || b.t - a.t < 8 || performance.now() - b.t > 80) return
+  let ux = -(b.x - a.x) / (b.t - a.t), uy = -(b.y - a.y) / (b.t - a.t) // px per ms
+  if (Math.hypot(ux, uy) < 0.25 || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  let last = performance.now()
+  const step = (now: number) => {
+    const dt = Math.min(32, now - last); last = now
+    vx.value += ux * dt; vy.value += uy * dt
+    const decay = 0.0032 * dt
+    ux *= Math.max(0, 1 - decay * 1.4); uy *= Math.max(0, 1 - decay * 1.4)
+    clampView()
+    if (Math.hypot(ux, uy) > 0.02) anim = requestAnimationFrame(step)
+  }
+  anim = requestAnimationFrame(step)
 }
 function pointerUp(e: PointerEvent) {
+  const wasSingle = pointers.size === 1
   pointers.delete(e.pointerId)
   if (gesture?.moved) suppressClick = true
+  if (wasSingle && e.pointerType !== 'mouse' && e.type === 'pointerup') {
+    if (gesture?.moved) fling()
+    else {
+      const now = performance.now()
+      if (lastTap && now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 32) {
+        zoomAt(2.4, e.clientX - stage.value!.getBoundingClientRect().left); lastTap = undefined
+      } else lastTap = { t: now, x: e.clientX, y: e.clientY }
+    }
+  }
   if (!pointers.size) { gesture = undefined; dragging.value = false } else if (gesture) { gesture.dist = spread(); gesture.px = px.value }
 }
 function clickCapture(e: MouseEvent) { if (suppressClick) { e.stopPropagation(); e.preventDefault() } suppressClick = false }
@@ -235,6 +269,40 @@ onMounted(() => {
   requestAnimationFrame(() => reveal(props.selectedId))
 })
 onBeforeUnmount(() => { observer?.disconnect(); cancelAnimationFrame(anim); stage.value?.removeEventListener('wheel', wheel) })
+
+// ---- touch navigation strip: previous / next event and an overview you can drag
+const timeline = computed(() => resolveTimes(props.universe))
+const stepList = computed(() => props.universe.occurrences.filter((o) => !hidden(o) && layout.value.nodes[o.id]).sort((a, b) => layout.value.nodes[a.id]!.x - layout.value.nodes[b.id]!.x || layout.value.nodes[a.id]!.y - layout.value.nodes[b.id]!.y))
+const stepIndex = computed(() => stepList.value.findIndex((o) => o.id === props.selectedId))
+function step(by: number) {
+  const list = stepList.value
+  const next = list[stepIndex.value < 0 ? (by > 0 ? 0 : list.length - 1) : stepIndex.value + by]
+  if (next) { emit('select', next.id); reveal(next.id) }
+}
+const mapSpan = computed(() => Math.max(1e-9, extent.value.tMax - extent.value.tMin))
+const mapFrac = (t: number) => Math.min(1, Math.max(0, (t - extent.value.tMin) / mapSpan.value))
+const mapDots = computed(() => props.universe.occurrences.filter((o) => !hidden(o) && layout.value.nodes[o.id]).map((o) => {
+  const t = timeline.value[o.id]
+  const lanes = Math.max(1, props.universe.worlds.length - 1)
+  return { id: o.id, left: t ? mapFrac(t.start) * 100 : 100, top: 18 + (layout.value.nodes[o.id]!.laneIndex / lanes) * 64, tone: toneOf(o.worldId), selected: o.id === props.selectedId }
+}))
+const mapView = computed(() => {
+  const l = layout.value
+  const a = mapFrac(timeOfX(l, vx.value)), b = mapFrac(timeOfX(l, vx.value + size.value.w))
+  return { left: a * 100, width: Math.max((b - a) * 100, 1.5) }
+})
+function mapSeek(e: PointerEvent) {
+  const track = e.currentTarget as HTMLElement
+  const rect = track.getBoundingClientRect()
+  const f = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+  const t = extent.value.tMin + f * mapSpan.value
+  cancelAnimationFrame(anim)
+  vx.value = xOfTime(layout.value, t) - size.value.w / 2
+  autoFit.value = false
+  clampView()
+}
+function mapDown(e: PointerEvent) { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); mapSeek(e) }
+function mapMove(e: PointerEvent) { if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) mapSeek(e) }
 
 const scaleText = computed(() => `${ticks.value.unitName} ticks`)
 const cursorText = computed(() => (cursorT.value === undefined ? '' : formatTime(cursorT.value, calendar.value)))
@@ -279,6 +347,15 @@ const ordered = computed(() => props.universe.occurrences.filter((o) => !hidden(
     </div>
 
     <ol class="sr-only" aria-label="Events in time order"><li v-for="o in ordered" :key="o.id"><button @click="emit('select', o.id)">{{ eventOf(o).title }}, {{ o.placement.label }}</button></li></ol>
+
+    <div v-if="touchUi" class="navstrip no-pan" role="group" aria-label="Move through the timeline">
+      <button class="nav-step" aria-label="Previous event" :disabled="stepIndex <= 0" @click="step(-1)">‹</button>
+      <div class="minimap" role="slider" aria-label="Overview: drag to move along the timeline" tabindex="0" :aria-valuenow="Math.round(mapView.left)" aria-valuemin="0" aria-valuemax="100" @pointerdown="mapDown" @pointermove="mapMove">
+        <span v-for="d in mapDots" :key="d.id" :class="['map-dot', `tone-${d.tone}`, { selected: d.selected }]" :style="{ left: `${d.left}%`, top: `${d.top}%` }"></span>
+        <span class="map-view" :style="{ left: `${mapView.left}%`, width: `${mapView.width}%` }"></span>
+      </div>
+      <button class="nav-step" aria-label="Next event" :disabled="stepIndex >= stepList.length - 1" @click="step(1)">›</button>
+    </div>
 
     <div class="hud" role="toolbar" aria-label="Timeline controls">
       <div class="zoom"><button aria-label="Zoom out" @click="zoomOut">−</button><span aria-live="polite">{{ zoomText }}</span><button aria-label="Zoom in" @click="zoomIn">+</button><button class="reset" :disabled="autoFit" @click="setFit">Fit all</button></div>

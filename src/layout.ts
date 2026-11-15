@@ -174,39 +174,101 @@ export interface Shift { x: number; y: number; /** viewport width; endpoints are
 const NO_SHIFT: Shift = { x: 0, y: 0, w: Infinity }
 const OUT = 4000
 
+/** Where an edge leaves and enters its cards, in canvas coordinates. */
+export interface EdgePlan {
+  edge: Edge
+  /** 'h': right side to left side; 'v': top/bottom to bottom/top (returns, or events that overlap in time). */
+  mode: 'h' | 'v'
+  x1: number; y1: number; x2: number; y2: number
+  /** Sideways bow (px) so a vertical edge passes beside, not through, the cards between its ends. */
+  bow: number
+  down: boolean
+  /** When cards sit between the ends of an 'h' edge, it runs along the gap under the source's row instead of behind them. */
+  channelY?: number
+}
+
 /**
- * Edge routing: a smooth curve from the right side of the earlier card to the left side of the later one.
- * When the target is not clearly to the right (a return, or overlapping in time) it leaves the top or
- * bottom instead, so no curve ever doubles back through its own cards.
- * `shift` converts to viewport coordinates (and clamps), which keeps SVG coordinates small at any zoom.
+ * Plans every edge at once so that connections do not pile onto one point: edges sharing a side of a card get
+ * their own attachment point along it (ordered by where they go, so they do not cross at the card), and vertical
+ * edges that would run through cards in between are bowed around them.
  */
-export function edgePath(layout: Layout, edge: Edge, shift: Shift = NO_SHIFT): string | undefined {
-  const a = layout.nodes[edge.fromOccurrenceId]
-  const b = layout.nodes[edge.toOccurrenceId]
-  if (!a || !b) return undefined
-  const cx = (x: number) => Math.max(-OUT, Math.min(shift.w + OUT, x - shift.x))
-  const cy = (y: number) => y - shift.y
-  if (b.x >= a.x + a.w + 16) {
-    const x1 = cx(a.x + a.w), y1 = cy(a.y + a.h / 2), x2 = cx(b.x), y2 = cy(b.y + b.h / 2)
+export function planEdges(layout: Layout, edges: readonly Edge[]): EdgePlan[] {
+  type Slot = { edge: Edge; role: 'from' | 'to'; key: number }
+  const sides = new Map<string, Slot[]>()
+  const add = (nodeId: string, side: string, slot: Slot) => { const k = `${nodeId}|${side}`; const list = sides.get(k); if (list) list.push(slot); else sides.set(k, [slot]) }
+  const base: { edge: Edge; a: Node; b: Node; mode: 'h' | 'v'; down: boolean }[] = []
+  for (const edge of edges) {
+    const a = layout.nodes[edge.fromOccurrenceId], b = layout.nodes[edge.toOccurrenceId]
+    if (!a || !b) continue
+    const mode = b.x >= a.x + a.w + 16 ? 'h' : 'v'
+    const down = b.y >= a.y
+    base.push({ edge, a, b, mode, down })
+    if (mode === 'h') {
+      add(a.id, 'R', { edge, role: 'from', key: b.y + b.h / 2 })
+      add(b.id, 'L', { edge, role: 'to', key: a.y + a.h / 2 })
+    } else {
+      add(a.id, down ? 'B' : 'T', { edge, role: 'from', key: b.x + b.w / 2 })
+      add(b.id, down ? 'T' : 'B', { edge, role: 'to', key: a.x + a.w / 2 })
+    }
+  }
+  const port = new Map<string, number>() // `${edgeId}|${role}` -> fraction along the side
+  for (const list of sides.values()) {
+    list.sort((p, q) => p.key - q.key || p.edge.id.localeCompare(q.edge.id))
+    list.forEach((slot, i) => port.set(`${slot.edge.id}|${slot.role}`, (i + 1) / (list.length + 1)))
+  }
+  const nodes = Object.values(layout.nodes)
+  let bows = 0, channels = 0
+  return base.map(({ edge, a, b, mode, down }) => {
+    const pf = port.get(`${edge.id}|from`) ?? 0.5, pt = port.get(`${edge.id}|to`) ?? 0.5
+    if (mode === 'h') {
+      const x1 = a.x + a.w, y1 = a.y + a.h * pf, x2 = b.x, y2 = b.y + b.h * pt
+      const top = Math.min(y1, y2) - 3, bottom = Math.max(y1, y2) + 3
+      const blocked = x2 - x1 > 40 && nodes.some((n) => n.id !== a.id && n.id !== b.id && n.x < x2 - 20 && n.x + n.w > x1 + 20 && n.y < bottom && n.y + n.h > top)
+      return { edge, mode, x1, y1, x2, y2, bow: 0, down, ...(blocked ? { channelY: a.y + a.h + 8 + 2 * (channels++ % 4) } : {}) }
+    }
+    const x1 = a.x + a.w * pf, x2 = b.x + b.w * pt
+    const y1 = down ? a.y + a.h : a.y, y2 = down ? b.y : b.y + b.h
+    const lo = Math.min(y1, y2), hi = Math.max(y1, y2), xl = Math.min(x1, x2) - 6, xr = Math.max(x1, x2) + 6
+    const blocked = nodes.some((n) => n.id !== a.id && n.id !== b.id && n.y + n.h > lo + 2 && n.y < hi - 2 && n.x + n.w > xl && n.x < xr)
+    const bow = blocked ? (a.w / 2 + 26 + 12 * (bows++ % 4)) * (x1 <= x2 ? 1 : -1) : 0
+    return { edge, mode, x1, y1, x2, y2, bow, down }
+  })
+}
+
+const clampX = (shift: Shift) => (x: number) => Math.max(-OUT, Math.min(shift.w + OUT, x - shift.x))
+
+/** SVG path for a plan, in viewport coordinates (and clamped) so coordinates stay small at any zoom. */
+export function planPath(plan: EdgePlan, shift: Shift = NO_SHIFT): string {
+  const cx = clampX(shift), cy = (y: number) => y - shift.y
+  const x1 = cx(plan.x1), y1 = cy(plan.y1), x2 = cx(plan.x2), y2 = cy(plan.y2)
+  if (plan.mode === 'h' && plan.channelY !== undefined) {
+    const yc = cy(plan.channelY), run = Math.min(70, (x2 - x1) / 3)
+    return `M ${x1} ${y1} C ${x1 + 26} ${y1} ${x1 + run - 26} ${yc} ${x1 + run} ${yc} L ${x2 - run} ${yc} C ${x2 - run + 26} ${yc} ${x2 - 26} ${y2} ${x2} ${y2}`
+  }
+  if (plan.mode === 'h') {
     const k = Math.max(36, (x2 - x1) / 2)
     return `M ${x1} ${y1} C ${x1 + k} ${y1} ${x2 - k} ${y2} ${x2} ${y2}`
   }
-  const x1 = cx(a.x + a.w / 2), x2 = cx(b.x + b.w / 2)
-  const down = b.y >= a.y
-  const y1 = cy(down ? a.y + a.h : a.y)
-  const y2 = cy(down ? b.y : b.y + b.h)
-  const k = Math.max(30, Math.abs(y2 - y1) / 2)
-  return `M ${x1} ${y1} C ${x1} ${y1 + (down ? k : -k)} ${x2} ${y2 + (down ? -k : k)} ${x2} ${y2}`
+  const k = Math.max(30, Math.abs(y2 - y1) / 2), d = plan.down ? 1 : -1
+  return `M ${x1} ${y1} C ${x1 + plan.bow} ${y1 + d * k} ${x2 + plan.bow} ${y2 - d * k} ${x2} ${y2}`
+}
+
+export function planMidpoint(plan: EdgePlan, shift: Shift = NO_SHIFT): { x: number; y: number } {
+  const cx = clampX(shift)
+  const bow = plan.mode === 'v' ? plan.bow * 0.75 : 0
+  return { x: (cx(plan.x1) + cx(plan.x2)) / 2 + bow, y: (plan.channelY ?? (plan.y1 + plan.y2) / 2) - shift.y }
+}
+
+/** Single-edge convenience (no sharing of attachment points); the chart uses planEdges for everything. */
+export function edgePath(layout: Layout, edge: Edge, shift: Shift = NO_SHIFT): string | undefined {
+  const [plan] = planEdges(layout, [edge])
+  return plan ? planPath(plan, shift) : undefined
 }
 
 /** A flagged loop edge: the story returns to a moment it already visited. */
 export function isLoopClosure(_layout: Layout, edge: Edge): boolean { return edge.loop === true }
 
 export function edgeMidpoint(layout: Layout, edge: Edge, shift: Shift = NO_SHIFT): { x: number; y: number } | undefined {
-  const a = layout.nodes[edge.fromOccurrenceId]
-  const b = layout.nodes[edge.toOccurrenceId]
-  if (!a || !b) return undefined
-  const cx = (x: number) => Math.max(-OUT, Math.min(shift.w + OUT, x - shift.x))
-  if (b.x >= a.x + a.w + 16) return { x: (cx(a.x + a.w) + cx(b.x)) / 2, y: (a.y + a.h / 2 + b.y + b.h / 2) / 2 - shift.y }
-  return { x: (cx(a.x + a.w / 2) + cx(b.x + b.w / 2)) / 2, y: (a.y + b.y + (a.h + b.h) / 2) / 2 - shift.y }
+  const [plan] = planEdges(layout, [edge])
+  return plan ? planMidpoint(plan, shift) : undefined
 }
