@@ -4,7 +4,7 @@ import type { Universe } from '../domain'
 import { validateUniverse } from '../domain'
 import type { Route, View } from '../router'
 import { isHidden, searchOccurrences, visibleOccurrences } from '../spoilers'
-import { spoilerLevel as level } from '../state'
+import { spoilerLevel as level, touchUi } from '../state'
 import EventDetail from './EventDetail.vue'
 import GraphView from './GraphView.vue'
 import TimelineChart from './TimelineChart.vue'
@@ -12,7 +12,7 @@ import TimelineChart from './TimelineChart.vue'
 const props = defineProps<{ universe: Universe; universes: Universe[]; route: Route }>()
 const emit = defineEmits<{ navigate: [route: Route] }>()
 
-watch(() => props.universe.id, () => { query.value = '' })
+watch(() => props.universe.id, () => { query.value = ''; detailOpen.value = !touchUi.value })
 
 const query = ref('')
 const results = computed(() => searchOccurrences(props.universe, query.value, level.value).slice(0, 8))
@@ -26,9 +26,9 @@ const selected = computed(() => {
 })
 const view = computed<View>(() => props.route.view)
 const go = (patch: Partial<Route>) => emit('navigate', { universeId: props.universe.id, view: view.value, occurrenceId: selected.value?.id, ...patch })
-const select = (id: string) => { query.value = ''; go({ occurrenceId: id }) }
+const select = (id: string) => { query.value = ''; if (touchUi.value) detailOpen.value = true; go({ occurrenceId: id }) }
 const problems = computed(() => validateUniverse(props.universe))
-const detailOpen = ref(typeof window === 'undefined' || window.innerWidth > 760)
+const detailOpen = ref(!touchUi.value)
 const aboutOpen = ref(false)
 const hiddenCount = computed(() => props.universe.occurrences.filter((o) => isHidden(level.value, o.spoiler)).length)
 </script>

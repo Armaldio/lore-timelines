@@ -9,6 +9,9 @@ export const CARD_W = 200
 export const CARD_H = 84
 export const COMPACT_W = 176
 export const COMPACT_H = 30
+/** Touch screens get chips big enough to tap (≥ 44 px) and a little narrower. */
+export const TOUCH_COMPACT_W = 164
+export const TOUCH_COMPACT_H = 44
 export const COL_GAP = 46 // story-order spacing, used by the relationship view
 export const GAP_X = 12
 export const GAP_Y = 14
@@ -92,30 +95,38 @@ export function axisExtent(universe: Universe): AxisExtent {
 }
 
 /** Scale at which the whole dated range fits `viewWidth`. */
-export function fitScale(universe: Universe, viewWidth: number): number {
+export function fitScale(universe: Universe, viewWidth: number, touch = false): number {
   const { tMin, tMax } = axisExtent(universe)
-  return Math.max(1e-6, (viewWidth - PAD_X * 2 - CARD_W) / (tMax - tMin))
+  return Math.max(1e-6, (viewWidth - PAD_X * 2 - (touch ? TOUCH_COMPACT_W : CARD_W)) / (tMax - tMin))
 }
 
 /**
  * Deterministic: depends only on the universe and the scale, never on filters or the spoiler level.
  * Cards sit at their real time; within a lane a card takes the first row where it does not overlap.
  */
-export function computeLayout(universe: Universe, pxPerYear: number): Layout {
+export interface LayoutOptions {
+  /** Tap-sized chips when zoomed out. */
+  touch?: boolean
+  /** Occurrences that take no space at all (small screens drop spoiler-hidden cards instead of drawing placeholders). */
+  exclude?: ReadonlySet<string>
+}
+
+export function computeLayout(universe: Universe, pxPerYear: number, options: LayoutOptions = {}): Layout {
+  const occurrences = options.exclude?.size ? universe.occurrences.filter((o) => !options.exclude!.has(o.id)) : universe.occurrences
   const times = resolveTimes(universe)
   const { tMin, tMax } = axisExtent(universe)
   const px = Math.min(Math.max(pxPerYear, 1e-6), MAX_PX_PER_YEAR)
   const compact = px < COMPACT_BELOW
-  const w = compact ? COMPACT_W : CARD_W, h = compact ? COMPACT_H : CARD_H
+  const w = compact ? (options.touch ? TOUCH_COMPACT_W : COMPACT_W) : CARD_W, h = compact ? (options.touch ? TOUCH_COMPACT_H : COMPACT_H) : CARD_H
   const laneIndex = new Map(universe.worlds.map((world, i) => [world.id, i]))
   const rows = new Map<number, number[]>() // lane -> right edge of each row
   const nodes: Record<string, Node> = {}
   const undatedCount = new Map<number, number>()
-  const order = new Map(universe.occurrences.map((o, i) => [o.id, i]))
-  const dated = universe.occurrences.filter((o) => times[o.id]).sort((a, b) => times[a.id]!.start - times[b.id]!.start || order.get(a.id)! - order.get(b.id)!)
+  const order = new Map(occurrences.map((o, i) => [o.id, i]))
+  const dated = occurrences.filter((o) => times[o.id]).sort((a, b) => times[a.id]!.start - times[b.id]!.start || order.get(a.id)! - order.get(b.id)!)
   const datedWidth = PAD_X + (tMax - tMin) * px + w
   const undatedX = datedWidth + 70
-  const place = (o: (typeof universe.occurrences)[number], x: number, undated: boolean, row: number, spanW: number) => {
+  const place = (o: (typeof occurrences)[number], x: number, undated: boolean, row: number, spanW: number) => {
     const li = laneIndex.get(o.worldId) ?? 0
     nodes[o.id] = { id: o.id, laneIndex: li, row, x, y: 0, w, h, spanW, undated, basis: times[o.id]?.basis ?? 'undated', compact }
   }
@@ -130,7 +141,7 @@ export function computeLayout(universe: Universe, pxPerYear: number): Layout {
     rows.set(li, ends)
     place(o, x, false, row, Math.max(0, (t.end - t.start) * px))
   }
-  for (const o of universe.occurrences) {
+  for (const o of occurrences) {
     if (times[o.id]) continue
     const li = laneIndex.get(o.worldId) ?? 0
     const k = undatedCount.get(li) ?? 0
@@ -141,8 +152,8 @@ export function computeLayout(universe: Universe, pxPerYear: number): Layout {
   const lanes: LaneBox[] = []
   let y = RULER_H
   for (const [i] of universe.worlds.entries()) {
-    const n = Math.max(1, rows.get(i)?.length ?? 1)
-    const height = LANE_HEAD + n * h + (n - 1) * GAP_Y + LANE_PAD_B
+    const n = rows.get(i)?.length ?? 0 // a lane whose every card is excluded collapses to its heading
+    const height = LANE_HEAD + (n ? n * h + (n - 1) * GAP_Y : 0) + LANE_PAD_B
     lanes.push({ id: universe.worlds[i]!.id, y, height, rows: n })
     y += height + LANE_GAP
   }

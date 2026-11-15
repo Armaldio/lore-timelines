@@ -73,3 +73,16 @@ test('zoom is not capped: layout and edge paths stay finite and overlap-free at 
     }
   }
 })
+
+test('touch layout: chips are tap-sized and excluded (spoiler-hidden) cards take no space', () => {
+  const u = universes.find((x) => x.id === 'dark-netflix')!
+  const hidden = new Set(u.occurrences.filter((o) => o.spoiler === 'major').map((o) => o.id))
+  const px = fitScale(u, 390, true)
+  const full = computeLayout(u, px, { touch: true })
+  const lean = computeLayout(u, px, { touch: true, exclude: hidden })
+  for (const n of Object.values(full.nodes)) assert.ok(n.h >= 44, `${n.id} is ${n.h}px tall`)
+  assert.equal(Object.keys(lean.nodes).length, u.occurrences.length - hidden.size)
+  assert.ok(lean.height < full.height, 'hiding cards shortens the stage')
+  for (const id of hidden) assert.equal(lean.nodes[id], undefined)
+  assert.ok(Object.values(computeLayout(u, 5000).nodes).every((n) => n.h === 84 || n.h === 30), 'desktop geometry unchanged')
+})
