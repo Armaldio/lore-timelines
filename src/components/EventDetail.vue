@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { edgeLabels, type Occurrence, type Universe } from '../domain'
+import { edgeLabels, verificationLabels, type Occurrence, type Universe } from '../domain'
 import { isHidden, type SpoilerLevel } from '../spoilers'
 import { iconPath } from '../icons'
 import { resolveTimes } from '../time'
@@ -24,7 +24,7 @@ const links = computed(() => props.universe.edges.flatMap((edge) => {
   if (!other || isHidden(props.level, other.spoiler)) return []
   const title = props.universe.events.find((e) => e.id === other.eventId)?.title ?? ''
   const worldName = props.universe.worlds.find((w) => w.id === other.worldId)?.name ?? ''
-  return [{ id: `${edge.id}`, occurrenceId: other.id, label: outgoing ? edgeLabels[edge.kind] : `Reached from (${edgeLabels[edge.kind].toLowerCase()})`, title, worldName }]
+  return [{ id: `${edge.id}`, note: edge.note, occurrenceId: other.id, label: outgoing ? edgeLabels[edge.kind] : `Reached from (${edgeLabels[edge.kind].toLowerCase()})`, title, worldName }]
 }))
 </script>
 
@@ -38,11 +38,12 @@ const links = computed(() => props.universe.edges.flatMap((edge) => {
       <p class="detail-date"><span aria-hidden="true">▦</span>{{ occurrence.placement.label }} <small>{{ placementKinds[occurrence.placement.kind] }}</small></p>
       <p v-if="basisNote[basis]" class="basis-note">{{ basisNote[basis] }}</p>
       <p v-if="occurrence.placement.kind === 'disputed'" class="alternatives">Competing readings: {{ occurrence.placement.alternatives.join(' · ') }}</p>
+      <p :class="['verification', occurrence.verification ?? 'unverified']">{{ verificationLabels[occurrence.verification ?? 'unverified'] }}<template v-if="universe.reviewedAt"> · dataset reviewed {{ universe.reviewedAt }}</template></p>
       <p class="detail-description">{{ event.description }}</p>
       <p v-if="occurrence.uncertainty" class="uncertainty"><span aria-hidden="true">ⓘ</span>{{ occurrence.uncertainty }}</p>
       <section class="detail-section"><h3>Participants</h3><div class="chips"><span v-for="c in characters" :key="c.id" class="chip">{{ c.name }}</span><span v-if="!characters.length" class="muted">No participants recorded</span></div></section>
       <section class="detail-section"><h3>Linked events</h3>
-        <ul class="link-list"><li v-for="l in links" :key="l.id"><span class="link-kind">{{ l.label }}</span> <button class="chip chip-link" @click="emit('select', l.occurrenceId)">{{ l.title }}<small> · {{ l.worldName }}</small></button></li></ul>
+        <ul class="link-list"><li v-for="l in links" :key="l.id"><span class="link-kind">{{ l.label }}</span> <button class="chip chip-link" @click="emit('select', l.occurrenceId)">{{ l.title }}<small> · {{ l.worldName }}</small></button><small v-if="l.note" class="link-note">{{ l.note }}</small></li></ul>
         <span v-if="!links.length" class="muted">No declared links</span>
       </section>
       <section class="detail-section"><h3>Sources</h3><ul class="link-list"><li v-for="s in sources" :key="s.id"><a v-if="s.url" class="chip source-chip" :href="s.url" target="_blank" rel="noopener noreferrer">{{ s.title }}</a><span v-else class="chip source-chip">{{ s.title }}</span> <small class="muted">{{ s.kind }}</small></li></ul><span v-if="!sources.length" class="muted">No source linked yet</span></section>
