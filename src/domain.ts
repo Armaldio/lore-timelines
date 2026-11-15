@@ -11,21 +11,31 @@ export type Calendar = 'gregorian' | 'galactic'
 /** Where an occurrence sits on the time axis when its placement is only a label (see src/time.ts). */
 export interface When { start: string; end?: string }
 export interface Source { id: string; title: string; kind: 'film' | 'book' | 'episode' | 'reference'; url?: string }
+/** How far an occurrence has been checked against its cited sources (see docs/VERIFICATION.md). */
+export type Verification = 'verified' | 'partial' | 'unverified'
+export const verificationLabels: Record<Verification, string> = { verified: 'Checked against sources', partial: 'Partly checked', unverified: 'Not yet checked' }
 export interface Character { id: string; name: string; description?: string }
 export interface Continuity { id: string; name: string; summary: string }
 export interface World { id: string; continuityId: string; name: string; summary: string; tone: 'teal' | 'coral' | 'gold' }
-export interface Event { id: string; title: string; description: string; characterIds: string[]; icon?: string }
+export interface Event { id: string; title: string; description: string; characterIds: string[]; icon?: string
+  /** Other names the event is known by; searched like the title. */
+  aliases?: string[] }
 export interface Occurrence {
   id: string; eventId: string; worldId: string; placement: DatePlacement
   spoiler: 'none' | 'mild' | 'major'; uncertainty?: string; sourceIds: string[]
   /** Inferred axis position, for disputed, label-only or story-ordered placements. */
   when?: When
+  verification?: Verification
 }
-export interface Edge { id: string; fromOccurrenceId: string; toOccurrenceId: string; kind: 'leads-to' | 'branches-to' | 'returns-to' | 'related'; loop?: true }
+export interface Edge { id: string; fromOccurrenceId: string; toOccurrenceId: string; kind: 'leads-to' | 'branches-to' | 'returns-to' | 'related'; loop?: true
+  /** One line saying why the two occurrences are connected. */
+  note?: string }
 export interface Universe {
   id: string; title: string; subtitle: string; description: string
   /** 'gregorian' (default) or 'galactic' (negative years = BBY, positive = ABY). */
   axis?: { calendar: Calendar }
+  /** ISO date of the last full source check of this dataset. */
+  reviewedAt?: string
   continuities: Continuity[]; worlds: World[]; characters: Character[]; sources: Source[]
   events: Event[]; occurrences: Occurrence[]; edges: Edge[]
 }
@@ -44,6 +54,7 @@ export function validateUniverse(value: unknown): string[] {
   if (value.axis !== undefined && (!isRecord(value.axis) || !['gregorian', 'galactic'].includes(String(value.axis.calendar)))) errors.push('Universe axis calendar must be gregorian or galactic.')
   if (!isText(value.id)) errors.push('Universe needs a stable, non-empty id.')
   if (!isText(value.title)) errors.push('Universe needs a title.')
+  if (value.reviewedAt !== undefined && !(typeof value.reviewedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.reviewedAt))) errors.push('Universe reviewedAt must be an ISO date.')
   if (typeof value.subtitle !== 'string' || typeof value.description !== 'string') errors.push('Universe needs a subtitle and description.')
   const fields = ['continuities', 'worlds', 'characters', 'sources', 'events', 'occurrences', 'edges'] as const
   const lists: Record<(typeof fields)[number], unknown[]> = { continuities: [], worlds: [], characters: [], sources: [], events: [], occurrences: [], edges: [] }
@@ -94,6 +105,7 @@ export function validateUniverse(value: unknown): string[] {
   for (const event of records.events) {
     if (!isText(event.title) || typeof event.description !== 'string') errors.push(`Event ${String(event.id)} needs a title and description.`)
     if (event.icon !== undefined && !isText(event.icon)) errors.push(`Event ${String(event.id)} has an invalid icon.`)
+    if (event.aliases !== undefined && (!Array.isArray(event.aliases) || event.aliases.some((a) => !isText(a)))) errors.push(`Event ${String(event.id)} has invalid aliases.`)
     if (!Array.isArray(event.characterIds)) errors.push(`Event ${String(event.id)} characterIds must be an array.`)
     else for (const id of event.characterIds) if (!isText(id) || !characterIds.has(id)) errors.push(`Event ${String(event.id)} references missing character ${String(id)}.`)
   }
@@ -101,6 +113,7 @@ export function validateUniverse(value: unknown): string[] {
     if (!eventIds.has(String(occurrence.eventId))) errors.push(`Occurrence ${String(occurrence.id)} references missing event ${String(occurrence.eventId)}.`)
     if (!worldIds.has(String(occurrence.worldId))) errors.push(`Occurrence ${String(occurrence.id)} references missing world ${String(occurrence.worldId)}.`)
     if (!['none', 'mild', 'major'].includes(String(occurrence.spoiler))) errors.push(`Occurrence ${String(occurrence.id)} has an invalid spoiler scope.`)
+    if (occurrence.verification !== undefined && !['verified', 'partial', 'unverified'].includes(String(occurrence.verification))) errors.push(`Occurrence ${String(occurrence.id)} has an invalid verification.`)
     if (occurrence.uncertainty !== undefined && typeof occurrence.uncertainty !== 'string') errors.push(`Occurrence ${String(occurrence.id)} has invalid uncertainty.`)
     if (!Array.isArray(occurrence.sourceIds)) errors.push(`Occurrence ${String(occurrence.id)} sourceIds must be an array.`)
     else for (const id of occurrence.sourceIds) if (!isText(id) || !sourceIds.has(id)) errors.push(`Occurrence ${String(occurrence.id)} references missing source ${String(id)}.`)
@@ -115,6 +128,7 @@ export function validateUniverse(value: unknown): string[] {
     if (!occurrenceIds.has(String(edge.toOccurrenceId))) errors.push(`Edge ${String(edge.id)} references missing occurrence ${String(edge.toOccurrenceId)}.`)
     if (!['leads-to', 'branches-to', 'returns-to', 'related'].includes(String(edge.kind))) errors.push(`Edge ${String(edge.id)} has an invalid kind.`)
     if (edge.loop !== undefined && (edge.loop !== true || edge.kind !== 'returns-to')) errors.push(`Edge ${String(edge.id)} may only set loop: true on a returns-to edge.`)
+    if (edge.note !== undefined && !isText(edge.note)) errors.push(`Edge ${String(edge.id)} has an invalid note.`)
     if (edge.fromOccurrenceId === edge.toOccurrenceId) errors.push(`Edge ${String(edge.id)} cannot point an occurrence to itself.`)
   }
   return errors

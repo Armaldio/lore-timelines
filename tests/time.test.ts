@@ -11,15 +11,19 @@ test('dates parse to fractional years on a gregorian or galactic calendar', () =
   assert.equal(parseTime('After the Snap'), undefined)
 })
 
-test('placements resolve by stated date, inferred when, or story-order derivation', () => {
-  const dd = universes.find((u) => u.id === 'donnie-darko')!
-  const t = resolveTimes(dd)
-  assert.equal(t['frank-wakes-donnie-primary']!.basis, 'stated')
-  assert.equal(t['engine-crash-tangent']!.basis, 'inferred')
-  assert.ok(Math.abs(t['morning-after-primary']!.start - (t['donnie-death-primary']!.end + STEP)) < 1e-9)
-  assert.equal(t['morning-after-primary']!.basis, 'derived')
-  const dark = resolveTimes(universes.find((u) => u.id === 'dark-netflix')!)
-  assert.equal(dark['dark-knot-revealed-m'], undefined, 'outside-time events stay undated rather than being invented')
+test('placements resolve by stated date, inferred when, story-order derivation, or stay undated', () => {
+  const all = universes.flatMap((u) => { const t = resolveTimes(u); return u.occurrences.map((o) => ({ u, o, r: t[o.id], t })) })
+  const basis = (b: string) => all.filter((x) => x.r?.basis === b)
+  assert.ok(basis('stated').length > 40, 'most occurrences carry a stated date')
+  assert.ok(basis('inferred').length >= 1, 'some placements are inferred through `when`')
+  for (const x of basis('inferred')) assert.ok(x.o.when, `${x.o.id} is inferred but has no when`)
+  for (const x of basis('derived')) {
+    assert.equal(x.o.placement.kind, 'relative', x.o.id)
+    const p = x.o.placement as { after?: string; before?: string }
+    const anchor = x.t[(p.after ?? p.before)!]!
+    assert.ok(Math.abs(x.r!.start - (p.after ? anchor.end + STEP : anchor.start - STEP)) < 1e-9, x.o.id)
+  }
+  for (const x of all.filter((y) => !y.r)) assert.ok(!x.o.when && x.o.placement.kind !== 'exact', `${x.o.id} should not be undated`)
 })
 
 test('ticks refine as the scale grows, never crowd, and stay inside the window', () => {

@@ -40,7 +40,7 @@ The in-app validator rejects duplicate IDs, malformed placements, and broken con
 
 ## Datasets
 
-`src/data/{dark,star-wars,donnie-darko,back-to-the-future,mcu}.ts` hold 15–25 curated story events each, every occurrence with a source, a deliberate spoiler scope and, for anything but an exact date, an `uncertainty` note. `tests/data.test.ts` enforces these rules. See `docs/VERIFICATION.md` for the verification evidence and known limitations.
+`src/data/{dark,star-wars,donnie-darko,back-to-the-future,mcu}.ts` hold 17–25 curated story events each, every occurrence with a linked source, a deliberate spoiler scope, a `verification` level (verified / partial / unverified, shown in the detail panel) and, for anything but an exact date, an `uncertainty` note; every edge has a one-line `note`, events may carry `aliases` (searched), and each universe records `reviewedAt`. `tests/data.test.ts` enforces these rules. See `docs/VERIFICATION.md` for the verification evidence and known limitations.
 
 ## Extension
 

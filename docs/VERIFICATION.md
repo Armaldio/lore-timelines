@@ -7,12 +7,24 @@
 Landing page; timeline and relationship views of all five universes with all spoilers shown; Donnie Darko at the default spoiler level (7 events hidden, counted but not named); search for "Gretchen" at the default level (the hidden death event is not offered); keyboard arrow navigation and zoom on Star Wars; Dark timeline and Star Wars graph on a 390px viewport (horizontal scroll inside the chart, text version of the graph below it). Screenshots were reviewed locally and are not committed.
 
 ## Factual verification status — read this
-The five datasets were drafted from memory by model agents without live source checks, then audited only for structural rules. They have **not** been checked against the works scene by scene. Treat dates and orderings as a good-faith first pass:
-- Dark: Mikkel's disappearance and several world-crossing events are ranges or relative placements; episode titles in sources are from memory.
-- Star Wars: 9 BBY, 3 ABY and 5 ABY come from Lucasfilm chronology rather than on-screen statements; Scarif is placed at 0 BBY with an uncertainty note; the Clone Wars season 7 source title needs checking.
-- Donnie Darko: only 2 Oct 1988 is an exact date; mid-October events are relative. The 1–2 Nov dates in the original placeholder were dropped as unsupported.
-- Back to the Future: the 1885 events carry no exact date (September 1885 per the film, unverified).
-- MCU: Iron Man (2008/2010), Sokovia, the Snap and the Time Heist/Endgame battle are marked disputed; TVA and other-universe events have no date.
+Reviewed 2026-11-15 by research agents reading live web sources (mostly Wikipedia; fandom wikis were blocked, so Star Wars used a Wookieepedia mirror). Every occurrence carries a `verification` level shown in the detail panel: **verified** = a source that was actually read confirms date and placement; **partial** = the event is confirmed but its date or order is not; **unverified** = not confirmed.
+
+| Universe | Events | Verified | Partial | Unverified |
+|---|---|---|---|---|
+| Dark | 17 | 10 | 8 | 1 |
+| Star Wars | 23 | 15 | 8 | 0 |
+| Donnie Darko | 18 | 12 | 6 | 0 |
+| Back to the Future | 25 | 10 | 14 | 1 |
+| MCU | 20 | 10 | 10 | 0 |
+
+Corrections made in this pass include: BTTF Marty's 1885 arrival (Sep 2) and Doc's part II arrival (Oct 26, 1985); Dark's Mikkel arrival (Nov 5, 1986) and an unsupported "Adam spares Eva" event rewritten; Star Wars academy fall (28 ABY) and Scarif (1–0 BBY); Donnie Darko's party moved to Oct 29 and the tangent chain re-ordered; MCU's Snap fixed at 2018 and a wrong Multiverse of Madness description rewritten. Seven edges that ran backwards in time as `leads-to` were retyped, and Back to the Future gained its one real loop (altered 1985 back to the Nov 12, 1955 dance).
+
+Limits that remain:
+- **"Verified" is only as good as the source read.** Wikipedia plot summaries do not say whether years such as 2012 or 2018 appear on screen; official-timeline years (MCU 2010, 2023, 2024) rest on Wikipedia's summary, not Marvel's own page.
+- **Donnie Darko's Oct 3–30 dates come from Kelly's shooting script**, not the final cut's title cards (not reachable); the cinema, fire and arrest dates are inconsistent in the script.
+- Dark's Mikkel disappearance day, Jonas's first 1986 trip and the Tannhaus crash year are inferred; the Dark season Wikipedia pages returned 404, so the episode-list page is cited.
+- BTTF film one states no on-screen date; its dates come from part II/III summaries.
+- Source URLs point at general pages (film, episode list, year page), not scenes or timestamps.
 
 ## Real time axis (checked)
 `tests/time.test.ts` and `tests/layout.test.ts`: dates parse to fractional years (Gregorian and BBY/ABY); cards sit exactly at their date (30 years of Back to the Future = 30 × scale px); no card overlaps another in its lane at four scales for all five universes; zooming in reduces lane rows; ticks refine through 50 years → 5 years → year → month → day → hour, never crowd (≥ 60 px apart) and are never blank. Headless Chromium: drag from lane-heading text pans without selecting text, a drag that starts on a card does not select it, Ctrl+wheel zooms and the ruler follows. **Not verified:** real touch pinch (implemented with touch events, untested on a device) and screen readers.
@@ -24,4 +36,4 @@ The five datasets were drafted from memory by model agents without live source c
 - Events in the same year (Star Wars, Dark) stack in rows until you zoom in; year-only dates span their whole year.
 - The relationship view keeps story-order columns; only the timeline has the real time axis.
 - The detail-panel art is a decorative placeholder; no images are used.
-- Source URLs are mostly absent.
+- Source URLs are page-level, not scene-level.

@@ -35,6 +35,6 @@ export function searchOccurrences(universe: Universe, query: string, level: Spoi
     if (!event) return false
     const people = universe.characters.filter((c) => event.characterIds.includes(c.id)).map((c) => c.name)
     const world = universe.worlds.find((w) => w.id === o.worldId)?.name ?? ''
-    return [event.title, event.description, o.placement.label, world, ...people].join(' ').toLowerCase().includes(needle)
+    return [event.title, ...(event.aliases ?? []), event.description, o.placement.label, world, ...people].join(' ').toLowerCase().includes(needle)
   })
 }

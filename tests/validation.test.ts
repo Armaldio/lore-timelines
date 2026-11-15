@@ -57,3 +57,15 @@ test('loop may only flag a returns-to edge', () => {
   leads.loop = true
   assert.ok(validateUniverse(universe).some((error) => error.includes('loop: true on a returns-to edge')))
 })
+
+test('verification, aliases, edge notes and reviewedAt are validated', () => {
+  const base = structuredClone(universes[0]!) as any
+  assert.deepEqual(validateUniverse(base), [])
+  const bad = structuredClone(base)
+  bad.occurrences[0].verification = 'sure'
+  bad.events[0].aliases = ['']
+  bad.edges[0].note = ' '
+  bad.reviewedAt = 'yesterday'
+  const errors = validateUniverse(bad).join('\n')
+  for (const word of ['verification', 'aliases', 'note', 'reviewedAt']) assert.match(errors, new RegExp(word))
+})

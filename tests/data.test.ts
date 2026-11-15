@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { validateUniverse } from '../src/domain.ts'
 import { universes } from '../src/data/universes.ts'
 import { computeLayout, isLoopClosure } from '../src/layout.ts'
+import { resolveTimes } from '../src/time.ts'
 
 const byId = (id: string) => universes.find((u) => u.id === id)!
 const kindsOf = (id: string) => new Set(byId(id).edges.map((e) => e.kind))
@@ -24,6 +25,30 @@ for (const universe of universes) {
     for (const e of universe.events) assert.ok(universe.occurrences.some((o) => o.eventId === e.id), `${e.id} has no occurrence`)
     const named = universe.events.filter((e) => e.characterIds.length > 0).length
     assert.ok(named >= universe.events.length - 1, 'at most one event may lack named participants')
+  })
+}
+
+for (const universe of universes) {
+  test(`${universe.title}: checked content — sources linked, verification stated, edges explained, time never runs backwards on leads-to`, () => {
+    assert.match(universe.reviewedAt ?? '', /^\d{4}-\d{2}-\d{2}$/, 'reviewedAt missing')
+    for (const source of universe.sources) assert.ok(source.url, `source ${source.id} has no URL`)
+    const used = new Set(universe.occurrences.flatMap((o) => o.sourceIds))
+    for (const source of universe.sources) assert.ok(used.has(source.id), `source ${source.id} is never cited`)
+    const people = new Set(universe.events.flatMap((e) => e.characterIds))
+    for (const c of universe.characters) assert.ok(people.has(c.id), `character ${c.id} takes part in no event`)
+    for (const o of universe.occurrences) {
+      assert.ok(o.verification, `${o.id} has no verification level`)
+      if (o.verification === 'verified') assert.ok(o.sourceIds.some((id) => universe.sources.find((s) => s.id === id)?.url), `${o.id} is verified but cites no linked source`)
+    }
+    for (const e of universe.edges) assert.ok(e.note && e.note.length > 15, `edge ${e.id} has no explanatory note`)
+    const times = resolveTimes(universe)
+    for (const e of universe.edges) {
+      if (e.kind !== 'leads-to') continue
+      const a = times[e.fromOccurrenceId], b = times[e.toOccurrenceId]
+      if (a && b) assert.ok(b.start >= a.start - 1e-9, `leads-to ${e.id} runs backwards in time`)
+    }
+    const verified = universe.occurrences.filter((o) => o.verification === 'verified').length
+    assert.ok(verified >= universe.occurrences.length * 0.4, `only ${verified}/${universe.occurrences.length} occurrences verified`)
   })
 }
 
