@@ -12,16 +12,18 @@ export const defaultSpoilerLevel: SpoilerLevel = 'mild'
 export const isHidden = (level: SpoilerLevel, spoiler: Occurrence['spoiler']) =>
   (level === 'mild' && spoiler === 'major') || (level === 'none' && spoiler !== 'none')
 
-const key = (universeId: string) => `lore-timelines:spoilers:${universeId}`
+/** One setting for the whole app, kept across reloads and shared by every universe. */
+export const SPOILER_KEY = 'lore-timelines:spoiler-level'
 type Store = Pick<Storage, 'getItem' | 'setItem'>
-const sessionStore = (): Store | undefined => { try { return globalThis.sessionStorage } catch { return undefined } }
+const localStore = (): Store | undefined => { try { return globalThis.localStorage } catch { return undefined } }
 
-export function loadSpoilerLevel(universeId: string, store: Store | undefined = sessionStore()): SpoilerLevel {
-  const value = store?.getItem(key(universeId))
+export function loadSpoilerLevel(store: Store | undefined = localStore()): SpoilerLevel {
+  let value: string | null | undefined
+  try { value = store?.getItem(SPOILER_KEY) } catch { value = undefined }
   return value === 'all' || value === 'mild' || value === 'none' ? value : defaultSpoilerLevel
 }
-export function saveSpoilerLevel(universeId: string, level: SpoilerLevel, store: Store | undefined = sessionStore()) {
-  try { store?.setItem(key(universeId), level) } catch { /* storage unavailable: the choice just lasts for this page view */ }
+export function saveSpoilerLevel(level: SpoilerLevel, store: Store | undefined = localStore()) {
+  try { store?.setItem(SPOILER_KEY, level) } catch { /* storage unavailable: the choice lasts for this page view only */ }
 }
 
 export const visibleOccurrences = (universe: Universe, level: SpoilerLevel) => universe.occurrences.filter((o) => !isHidden(level, o.spoiler))
