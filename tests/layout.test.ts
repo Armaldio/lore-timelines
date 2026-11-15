@@ -60,3 +60,16 @@ test('layout is deterministic and independent of anything but universe and scale
   const { tMin, tMax } = axisExtent(u)
   assert.ok(tMax - tMin > 0.05 && tMax - tMin < 0.2, 'Donnie Darko spans about a month')
 })
+
+test('zoom is not capped: layout and edge paths stay finite and overlap-free at extreme scales', () => {
+  for (const universe of universes) {
+    for (const px of [1e-3, 1e8, 1e10]) {
+      const layout = computeLayout(universe, px)
+      for (const n of Object.values(layout.nodes)) assert.ok(Number.isFinite(n.x) && Number.isFinite(n.y), `${universe.title} ${n.id} at ${px}`)
+      for (const edge of universe.edges) {
+        const d = edgePath(layout, edge, { x: layout.nodes[edge.fromOccurrenceId]!.x - 300, y: 0, w: 1200 })!
+        for (const num of d.match(/-?\d+(\.\d+)?/g)!) assert.ok(Math.abs(Number(num)) < 20000, `${universe.title} ${edge.id}: coordinate ${num} too large`)
+      }
+    }
+  }
+})

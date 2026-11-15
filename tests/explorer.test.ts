@@ -15,12 +15,17 @@ test('spoiler levels hide exactly what they promise', () => {
   assert.equal(isHidden('none', 'none'), false)
 })
 
-test('spoiler level persists per universe and defaults to hiding major spoilers', () => {
+test('one spoiler level is remembered for the whole app and defaults to hiding major spoilers', () => {
   const store = memory()
-  assert.equal(loadSpoilerLevel('dark-netflix', store), 'mild')
-  saveSpoilerLevel('dark-netflix', 'all', store)
-  assert.equal(loadSpoilerLevel('dark-netflix', store), 'all')
-  assert.equal(loadSpoilerLevel('star-wars', store), 'mild')
+  assert.equal(loadSpoilerLevel(store), 'mild')
+  saveSpoilerLevel('all', store)
+  assert.equal(loadSpoilerLevel(store), 'all')
+  saveSpoilerLevel('none', store)
+  assert.equal(loadSpoilerLevel(store), 'none')
+  assert.equal(loadSpoilerLevel(undefined), 'mild', 'no storage falls back to the safe default')
+  const broken = { getItem: () => { throw new Error('denied') }, setItem: () => { throw new Error('denied') } }
+  assert.equal(loadSpoilerLevel(broken), 'mild')
+  assert.doesNotThrow(() => saveSpoilerLevel('all', broken))
 })
 
 test('search never returns, and never matches text of, hidden occurrences', () => {

@@ -38,6 +38,9 @@ test('ticks refine as the scale grows, never crowd, and stay inside the window',
   }
   assert.deepEqual(units.slice(0, 1), ['50 years'])
   assert.ok(units.includes('year') && units.includes('month') && units.includes('day') && units.includes('hour'), units.join())
+  const fine = pickTicks(1988.752, 1988.752 + 2e-8, 5e9, 'gregorian')
+  assert.match(fine.unitName, /second|minute/)
+  assert.ok(fine.labelled.length >= 1 && /\d\d:\d\d/.test(fine.labelled[0]!.label))
 })
 
 test('galactic ticks read BBY / ABY and never go below one year', () => {
@@ -51,4 +54,11 @@ test('the ruler is never blank, even when no tick boundary is in view', () => {
   const set = pickTicks(1988.752, 1988.752 + 0.01, 1000, 'gregorian')
   assert.equal(set.labelled.length, 1)
   assert.match(set.labelled[0]!.label, /Oct 2, 1988/)
+})
+
+test('the period that began before the window is labelled at its left edge', () => {
+  const t0 = parseTime('1988-10-02')! + 20 / 525960
+  const set = pickTicks(t0, t0 + 5 / 525960, 8e7, 'gregorian')
+  assert.ok(set.context.length >= 1 && set.context[0]!.t <= t0, 'a context tick starts at or before the left edge')
+  assert.match(set.context[0]!.label, /Oct \d+, 1988/)
 })

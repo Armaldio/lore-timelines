@@ -19,8 +19,11 @@ export const LANE_PAD_B = 24
 export const LANE_GAP = 18
 /** Below this scale (pixels per year) cards collapse to one-line chips so lanes stay short. */
 export const COMPACT_BELOW = 360
-/** Browsers stop laying out elements somewhere around 33M px; stay far below it. */
-export const MAX_CANVAS_W = 8_000_000
+/** Space the floating top bars and bottom toolbar take from the stage (the timeline runs underneath them). */
+export const TOP_INSET = 104
+export const BOTTOM_INSET = 64
+/** Only a float-precision guard: positions are viewport-relative, so there is no canvas size limit. */
+export const MAX_PX_PER_YEAR = 5e10
 
 export interface Node {
   id: string; laneIndex: number; row: number; x: number; y: number; w: number; h: number
@@ -101,7 +104,7 @@ export function fitScale(universe: Universe, viewWidth: number): number {
 export function computeLayout(universe: Universe, pxPerYear: number): Layout {
   const times = resolveTimes(universe)
   const { tMin, tMax } = axisExtent(universe)
-  const px = Math.min(pxPerYear, MAX_CANVAS_W / Math.max(tMax - tMin, STEP))
+  const px = Math.min(Math.max(pxPerYear, 1e-6), MAX_PX_PER_YEAR)
   const compact = px < COMPACT_BELOW
   const w = compact ? COMPACT_W : CARD_W, h = compact ? COMPACT_H : CARD_H
   const laneIndex = new Map(universe.worlds.map((world, i) => [world.id, i]))
@@ -156,24 +159,31 @@ export function computeLayout(universe: Universe, pxPerYear: number): Layout {
 export const xOfTime = (layout: Pick<Layout, 'tMin' | 'px'>, t: number) => PAD_X + (t - layout.tMin) * layout.px
 export const timeOfX = (layout: Pick<Layout, 'tMin' | 'px'>, x: number) => layout.tMin + (x - PAD_X) / layout.px
 
+export interface Shift { x: number; y: number; /** viewport width; endpoints are clamped just outside it so far-away cards cannot produce huge coordinates */ w: number }
+const NO_SHIFT: Shift = { x: 0, y: 0, w: Infinity }
+const OUT = 4000
+
 /**
  * Edge routing: a smooth curve from the right side of the earlier card to the left side of the later one.
  * When the target is not clearly to the right (a return, or overlapping in time) it leaves the top or
  * bottom instead, so no curve ever doubles back through its own cards.
+ * `shift` converts to viewport coordinates (and clamps), which keeps SVG coordinates small at any zoom.
  */
-export function edgePath(layout: Layout, edge: Edge): string | undefined {
+export function edgePath(layout: Layout, edge: Edge, shift: Shift = NO_SHIFT): string | undefined {
   const a = layout.nodes[edge.fromOccurrenceId]
   const b = layout.nodes[edge.toOccurrenceId]
   if (!a || !b) return undefined
+  const cx = (x: number) => Math.max(-OUT, Math.min(shift.w + OUT, x - shift.x))
+  const cy = (y: number) => y - shift.y
   if (b.x >= a.x + a.w + 16) {
-    const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2
+    const x1 = cx(a.x + a.w), y1 = cy(a.y + a.h / 2), x2 = cx(b.x), y2 = cy(b.y + b.h / 2)
     const k = Math.max(36, (x2 - x1) / 2)
     return `M ${x1} ${y1} C ${x1 + k} ${y1} ${x2 - k} ${y2} ${x2} ${y2}`
   }
-  const x1 = a.x + a.w / 2, x2 = b.x + b.w / 2
+  const x1 = cx(a.x + a.w / 2), x2 = cx(b.x + b.w / 2)
   const down = b.y >= a.y
-  const y1 = down ? a.y + a.h : a.y
-  const y2 = down ? b.y : b.y + b.h
+  const y1 = cy(down ? a.y + a.h : a.y)
+  const y2 = cy(down ? b.y : b.y + b.h)
   const k = Math.max(30, Math.abs(y2 - y1) / 2)
   return `M ${x1} ${y1} C ${x1} ${y1 + (down ? k : -k)} ${x2} ${y2 + (down ? -k : k)} ${x2} ${y2}`
 }
@@ -181,10 +191,11 @@ export function edgePath(layout: Layout, edge: Edge): string | undefined {
 /** A flagged loop edge: the story returns to a moment it already visited. */
 export function isLoopClosure(_layout: Layout, edge: Edge): boolean { return edge.loop === true }
 
-export function edgeMidpoint(layout: Layout, edge: Edge): { x: number; y: number } | undefined {
+export function edgeMidpoint(layout: Layout, edge: Edge, shift: Shift = NO_SHIFT): { x: number; y: number } | undefined {
   const a = layout.nodes[edge.fromOccurrenceId]
   const b = layout.nodes[edge.toOccurrenceId]
   if (!a || !b) return undefined
-  if (b.x >= a.x + a.w + 16) return { x: (a.x + a.w + b.x) / 2, y: (a.y + a.h / 2 + b.y + b.h / 2) / 2 }
-  return { x: (a.x + a.w / 2 + b.x + b.w / 2) / 2, y: (a.y + b.y + (a.h + b.h) / 2) / 2 }
+  const cx = (x: number) => Math.max(-OUT, Math.min(shift.w + OUT, x - shift.x))
+  if (b.x >= a.x + a.w + 16) return { x: (cx(a.x + a.w) + cx(b.x)) / 2, y: (a.y + a.h / 2 + b.y + b.h / 2) / 2 - shift.y }
+  return { x: (cx(a.x + a.w / 2) + cx(b.x + b.w / 2)) / 2, y: (a.y + b.y + (a.h + b.h) / 2) / 2 - shift.y }
 }

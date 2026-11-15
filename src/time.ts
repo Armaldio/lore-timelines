@@ -89,6 +89,8 @@ export type Unit =
   | { kind: 'month'; n: number }
   | { kind: 'day'; n: number }
   | { kind: 'hour'; n: number }
+  | { kind: 'minute'; n: number }
+  | { kind: 'second'; n: number }
 
 /** Coarse → fine. `years` is the approximate length of one step. */
 const UNITS: { unit: Unit; years: number }[] = [
@@ -99,6 +101,8 @@ const UNITS: { unit: Unit; years: number }[] = [
   { unit: { kind: 'month', n: 3 }, years: 0.25 }, { unit: { kind: 'month', n: 1 }, years: 1 / 12 },
   { unit: { kind: 'day', n: 7 }, years: 7 / 365.25 }, { unit: { kind: 'day', n: 1 }, years: 1 / 365.25 },
   { unit: { kind: 'hour', n: 6 }, years: 0.25 / 365.25 }, { unit: { kind: 'hour', n: 1 }, years: 1 / 8766 },
+  { unit: { kind: 'minute', n: 15 }, years: 1 / 35064 }, { unit: { kind: 'minute', n: 1 }, years: 1 / 525960 },
+  { unit: { kind: 'second', n: 15 }, years: 1 / 2103840 }, { unit: { kind: 'second', n: 1 }, years: 1 / 31557600 },
 ]
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -110,7 +114,6 @@ const MIN_MINOR_PX = 12
 
 function unitsFor(calendar: Calendar) { return calendar === 'galactic' ? UNITS.filter((u) => u.unit.kind === 'year') : UNITS }
 
-export function maxPxPerYear(calendar: Calendar): number { return calendar === 'galactic' ? 700 : 8766 * 90 }
 
 function formatYear(year: number, calendar: Calendar): string {
   if (calendar === 'galactic') return year === 0 ? '0 (Yavin)' : year < 0 ? `${-year} BBY` : `${year} ABY`
@@ -140,7 +143,7 @@ function boundaries(unit: Unit, t0: number, t1: number, label: (t: number, ms: n
     }
     return out
   }
-  const stepMs = unit.kind === 'day' ? unit.n * 86400000 : unit.n * 3600000
+  const stepMs = unit.n * (unit.kind === 'day' ? 86400000 : unit.kind === 'hour' ? 3600000 : unit.kind === 'minute' ? 60000 : 1000)
   const base = utc(startYear)
   let ms = base + Math.floor((utc(startYear, 0, 1) + (t0 - startYear) * (yearStart(startYear + 1) - base) - base) / stepMs) * stepMs
   const limit = utc(Math.floor(t1) + 1) + 1
@@ -160,11 +163,13 @@ export function pickTicks(t0: number, t1: number, pxPerYear: number, calendar: C
   let idx = 0
   for (let i = list.length - 1; i >= 0; i--) if (list[i]!.years * pxPerYear >= MIN_LABEL_PX) { idx = i; break }
   const chosen = list[idx]!, finer = list[idx + 1]
-  const lab = (u: Unit) => (_t: number, _ms: number, y: number, mo: number, d: number, h: number) => {
+  const lab = (u: Unit) => (_t: number, ms: number, y: number, mo: number, d: number, h: number) => {
+    const mi = new Date(ms).getUTCMinutes(), se = new Date(ms).getUTCSeconds()
     if (u.kind === 'year') return formatYear(y, calendar)
     if (u.kind === 'month') return MONTHS[mo]!
     if (u.kind === 'day') return `${MONTHS[mo]} ${d}`
-    return `${fmt2(h)}:00`
+    if (u.kind === 'hour') return `${fmt2(h)}:00`
+    return `${fmt2(h)}:${fmt2(mi)}${u.kind === 'second' ? `:${fmt2(se)}` : ''}`
   }
   const labelled = boundaries(chosen.unit, t0, t1, lab(chosen.unit))
   // Never leave the ruler blank: when no boundary falls in view, name the date at the left edge.
@@ -175,8 +180,21 @@ export function pickTicks(t0: number, t1: number, pxPerYear: number, calendar: C
   if (chosen.unit.kind === 'month') context = boundaries({ kind: 'year', n: 1 }, t0 - 1, t1, (_t, _ms, y) => formatYear(y, calendar)).map((tk) => ({ ...tk, major: true }))
   else if (chosen.unit.kind === 'day') context = boundaries({ kind: 'month', n: 1 }, t0 - 0.1, t1, (_t, _ms, y, mo) => `${MONTHS[mo]} ${y}`).map((tk) => ({ ...tk, major: true }))
   else if (chosen.unit.kind === 'hour') context = boundaries({ kind: 'day', n: 1 }, t0 - 0.01, t1, (_t, _ms, y, mo, d) => `${MONTHS[mo]} ${d}, ${y}`).map((tk) => ({ ...tk, major: true }))
-  const unitName = chosen.unit.kind === 'year' ? (chosen.unit.n === 1 ? 'year' : `${chosen.unit.n} years`) : chosen.unit.kind === 'month' ? (chosen.unit.n === 1 ? 'month' : 'quarter') : chosen.unit.kind === 'day' ? (chosen.unit.n === 1 ? 'day' : 'week') : (chosen.unit.n === 1 ? 'hour' : `${chosen.unit.n} hours`)
+  else if (chosen.unit.kind === 'minute' || chosen.unit.kind === 'second') context = boundaries({ kind: 'hour', n: 1 }, t0 - 0.0001, t1, (_t, _ms, y, mo, d, h) => `${MONTHS[mo]} ${d}, ${y} · ${fmt2(h)}:00`).map((tk) => ({ ...tk, major: true }))
+  // The period that already began before the window still needs a label: add it at the left edge.
+  const ctxKind = chosen.unit.kind === 'month' ? 'year' : chosen.unit.kind === 'day' ? 'month' : chosen.unit.kind === 'hour' ? 'day' : chosen.unit.kind === 'minute' || chosen.unit.kind === 'second' ? 'hour' : undefined
+  if (ctxKind && (!context.length || (context[0]!.t - t0) * pxPerYear > 8)) context.unshift({ t: t0, label: periodLabel(ctxKind, t0, calendar), major: true })
+  const unitName = chosen.unit.kind === 'minute' ? (chosen.unit.n === 1 ? 'minute' : `${chosen.unit.n} minutes`) : chosen.unit.kind === 'second' ? (chosen.unit.n === 1 ? 'second' : `${chosen.unit.n} seconds`) : chosen.unit.kind === 'year' ? (chosen.unit.n === 1 ? 'year' : `${chosen.unit.n} years`) : chosen.unit.kind === 'month' ? (chosen.unit.n === 1 ? 'month' : 'quarter') : chosen.unit.kind === 'day' ? (chosen.unit.n === 1 ? 'day' : 'week') : (chosen.unit.n === 1 ? 'hour' : `${chosen.unit.n} hours`)
   return { unit: chosen.unit, labelled, minor, context, unitName }
+}
+
+function periodLabel(kind: 'year' | 'month' | 'day' | 'hour', t: number, calendar: Calendar): string {
+  const y = Math.floor(t)
+  const d = new Date(yearStart(y) + (t - y) * (yearStart(y + 1) - yearStart(y)))
+  if (kind === 'year') return formatYear(d.getUTCFullYear(), calendar)
+  if (kind === 'month') return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+  if (kind === 'day') return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()} · ${fmt2(d.getUTCHours())}:00`
 }
 
 /** Human date for a position, used for the cursor read-out. */

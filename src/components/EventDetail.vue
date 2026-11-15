@@ -6,7 +6,7 @@ import { iconPath } from '../icons'
 import { resolveTimes } from '../time'
 
 const props = defineProps<{ universe: Universe; occurrence: Occurrence; level: SpoilerLevel; view: 'timeline' | 'graph' }>()
-const emit = defineEmits<{ select: [id: string]; switchView: [view: 'timeline' | 'graph'] }>()
+const emit = defineEmits<{ select: [id: string]; switchView: [view: 'timeline' | 'graph']; close: [] }>()
 
 const event = computed(() => props.universe.events.find((e) => e.id === props.occurrence.eventId)!)
 const world = computed(() => props.universe.worlds.find((w) => w.id === props.occurrence.worldId))
@@ -30,7 +30,7 @@ const links = computed(() => props.universe.edges.flatMap((edge) => {
 
 <template>
   <aside class="detail-panel" aria-labelledby="detail-title">
-    <div class="panel-top"><span class="panel-kicker">EVENT DETAILS</span><span :class="['spoiler-tag', occurrence.spoiler]">{{ spoilerText[occurrence.spoiler] }}</span></div>
+    <div class="panel-top"><span class="panel-kicker">EVENT DETAILS</span><span :class="['spoiler-tag', occurrence.spoiler]">{{ spoilerText[occurrence.spoiler] }}</span><button class="panel-close" aria-label="Hide details" @click="emit('close')">×</button></div>
     <div class="detail-art" aria-hidden="true"><span class="art-orbit">◌</span><span class="art-line"></span><span class="art-caption">{{ universe.title }}<br /><small>{{ world?.name }}</small></span></div>
     <div class="detail-content">
       <span class="detail-world">{{ world?.name }}</span>
