@@ -8,10 +8,14 @@ import { resolveTimes, STEP, type TimeBasis } from './time.ts'
 export const CARD_W = 200
 export const CARD_H = 84
 export const COMPACT_W = 176
-export const COMPACT_H = 30
+export const COMPACT_H = 36
 /** Touch screens get chips big enough to tap (≥ 44 px) and a little narrower. */
-export const TOUCH_COMPACT_W = 164
+export const TOUCH_COMPACT_W = 210
 export const TOUCH_COMPACT_H = 44
+/** Chips are as wide as their title needs (about 8 px per character at 14 px bold), within these bounds. */
+export const CHIP_MIN_W = 120
+export const CHIP_MAX_W = 320
+export const chipWidth = (title: string) => Math.min(CHIP_MAX_W, Math.max(CHIP_MIN_W, Math.round(30 + title.length * 8)))
 export const COL_GAP = 46 // story-order spacing, used by the relationship view
 export const GAP_X = 12
 export const GAP_Y = 14
@@ -117,18 +121,21 @@ export function computeLayout(universe: Universe, pxPerYear: number, options: La
   const { tMin, tMax } = axisExtent(universe)
   const px = Math.min(Math.max(pxPerYear, 1e-6), MAX_PX_PER_YEAR)
   const compact = px < COMPACT_BELOW
-  const w = compact ? (options.touch ? TOUCH_COMPACT_W : COMPACT_W) : CARD_W, h = compact ? (options.touch ? TOUCH_COMPACT_H : COMPACT_H) : CARD_H
+  const h = compact ? (options.touch ? TOUCH_COMPACT_H : COMPACT_H) : CARD_H
+  const eventTitle = new Map(universe.events.map((e) => [e.id, e.title]))
+  const chipMax = options.touch ? TOUCH_COMPACT_W : CHIP_MAX_W // on touch long titles wrap to two lines instead of widening
+  const widthOf = (o: (typeof universe.occurrences)[number]) => (compact ? Math.min(chipMax, chipWidth(eventTitle.get(o.eventId) ?? '')) : CARD_W)
+  const w = compact ? chipMax : CARD_W // widest card: used for margins
   const laneIndex = new Map(universe.worlds.map((world, i) => [world.id, i]))
   const rows = new Map<number, number[]>() // lane -> right edge of each row
   const nodes: Record<string, Node> = {}
-  const undatedCount = new Map<number, number>()
   const order = new Map(occurrences.map((o, i) => [o.id, i]))
   const dated = occurrences.filter((o) => times[o.id]).sort((a, b) => times[a.id]!.start - times[b.id]!.start || order.get(a.id)! - order.get(b.id)!)
   const datedWidth = PAD_X + (tMax - tMin) * px + w
   const undatedX = datedWidth + 70
   const place = (o: (typeof occurrences)[number], x: number, undated: boolean, row: number, spanW: number) => {
     const li = laneIndex.get(o.worldId) ?? 0
-    nodes[o.id] = { id: o.id, laneIndex: li, row, x, y: 0, w, h, spanW, undated, basis: times[o.id]?.basis ?? 'undated', compact }
+    nodes[o.id] = { id: o.id, laneIndex: li, row, x, y: 0, w: widthOf(o), h, spanW, undated, basis: times[o.id]?.basis ?? 'undated', compact }
   }
   for (const o of dated) {
     const t = times[o.id]!
@@ -137,17 +144,18 @@ export function computeLayout(universe: Universe, pxPerYear: number, options: La
     const ends = rows.get(li) ?? []
     let row = ends.findIndex((end) => end + GAP_X <= x)
     if (row < 0) { row = ends.length; ends.push(0) }
-    ends[row] = x + w
+    ends[row] = x + widthOf(o)
     rows.set(li, ends)
     place(o, x, false, row, Math.max(0, (t.end - t.start) * px))
   }
+  const undatedEnd = new Map<number, number>()
   for (const o of occurrences) {
     if (times[o.id]) continue
     const li = laneIndex.get(o.worldId) ?? 0
-    const k = undatedCount.get(li) ?? 0
-    undatedCount.set(li, k + 1)
+    const x = undatedEnd.get(li) ?? undatedX
+    undatedEnd.set(li, x + widthOf(o) + GAP_X)
     if (!(rows.get(li)?.length)) rows.set(li, [0])
-    place(o, undatedX + k * (w + GAP_X), true, 0, 0)
+    place(o, x, true, 0, 0)
   }
   const lanes: LaneBox[] = []
   let y = RULER_H
@@ -158,8 +166,8 @@ export function computeLayout(universe: Universe, pxPerYear: number, options: La
     y += height + LANE_GAP
   }
   for (const node of Object.values(nodes)) node.y = lanes[node.laneIndex]!.y + LANE_HEAD + node.row * (h + GAP_Y)
-  const undatedWidth = Math.max(0, ...[...undatedCount.values()]) * (w + GAP_X)
-  const hasUndated = undatedWidth > 0
+  const hasUndated = undatedEnd.size > 0
+  const undatedWidth = Math.max(0, ...[...undatedEnd.values()]) - undatedX
   return {
     width: Math.ceil((hasUndated ? undatedX + undatedWidth : datedWidth) + PAD_X),
     height: y - LANE_GAP,

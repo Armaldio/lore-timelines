@@ -23,8 +23,8 @@ const calendar = computed(() => props.universe.axis?.calendar ?? 'gregorian')
 const extent = computed(() => axisExtent(props.universe))
 const fit = computed(() => fitScale(props.universe, size.value.w, touchUi.value))
 const MIN_MUL = 0.05
-// On touch screens spoiler-hidden cards take no space (they are counted in the lane header instead).
-const excluded = computed(() => (touchUi.value ? new Set(props.universe.occurrences.filter((o) => isHidden(props.level, o.spoiler)).map((o) => o.id)) : undefined))
+// Spoiler-hidden events take no space and draw nothing; each lane header says how many are hidden.
+const excluded = computed(() => new Set(props.universe.occurrences.filter((o) => isHidden(props.level, o.spoiler)).map((o) => o.id)))
 const layout = computed(() => computeLayout(props.universe, px.value, { touch: touchUi.value, exclude: excluded.value }))
 const zoomMul = computed(() => px.value / fit.value)
 // On touch screens a navigation strip (previous / overview / next) sits above the controls.
@@ -315,7 +315,7 @@ const ordered = computed(() => props.universe.occurrences.filter((o) => !hidden(
     <section v-for="(world, index) in universe.worlds" :key="world.id" :class="['h-lane', `tone-${world.tone}`, { muted: mutedLanes.has(world.id) }]" :style="{ top: `${laneTop(index)}px`, height: `${layout.lanes[index]!.height}px` }" :aria-label="`${world.name} timeline lane`">
       <span class="h-ring" aria-hidden="true"></span>
       <div class="h-head"><h2>{{ world.name }}</h2><p>{{ world.summary }}</p></div>
-      <span class="h-count">{{ countIn(world.id) }} / {{ totalIn(world.id) }}</span>
+      <span class="h-count">{{ countIn(world.id) }} shown<template v-if="totalIn(world.id) > countIn(world.id)"> · {{ totalIn(world.id) - countIn(world.id) }} hidden</template></span>
     </section>
     <div v-for="t in ticks.labelled" :key="`g${t.t}`" class="gridline" :style="{ left: `${sx(t.t)}px`, top: `${TOP_INSET + RULER_H}px` }" aria-hidden="true"></div>
     <div v-if="layout.undatedX !== undefined" class="undated-zone" :style="{ left: `${layout.undatedX - 24 - vx}px`, top: `${TOP_INSET + RULER_H}px` }" aria-hidden="true"></div>
@@ -325,19 +325,19 @@ const ordered = computed(() => props.universe.occurrences.filter((o) => !hidden(
       <g v-for="item in drawnEdges" :key="item.edge.id" :class="['h-edge-group', item.edge.kind, { active: item.active, quiet: !item.active && Boolean(emphasised) }]">
         <path :d="item.d" class="h-edge-halo" />
         <path :d="item.d" :class="['h-edge', item.edge.kind, { loop: item.loop }]" marker-end="url(#arrow)"><title>{{ item.loop ? 'Loop: returns to a moment already visited' : edgeWord[item.edge.kind] }}</title></path>
-        <text v-if="item.loop || item.active" :x="item.mid.x" :y="item.mid.y - 8" class="h-edge-label">{{ item.loop ? '↺ loop' : edgeWord[item.edge.kind] }}</text>
       </g>
     </svg>
     <template v-for="o in cards" :key="o.id">
-      <template v-if="!hidden(o)">
-        <span v-if="hasSpan(o.id)" :class="['h-span', `tone-${toneOf(o.worldId)}`]" :style="spanStyle(o.id)" aria-hidden="true"></span>
-        <button :data-occ="o.id" :class="['h-card', `tone-${toneOf(o.worldId)}`, `basis-${layout.nodes[o.id]!.basis}`, { selected: o.id === selectedId, dim: dimmed(o), approx: o.placement.kind !== 'exact', compact: layout.nodes[o.id]!.compact }]" :style="cardStyle(o.id)" :aria-pressed="o.id === selectedId" :aria-label="`${eventOf(o).title}, ${o.placement.label}${markerText(o) ? ` (${markerText(o)})` : ''}${basisText[layout.nodes[o.id]!.basis] ? `. ${basisText[layout.nodes[o.id]!.basis]}` : ''}`" :title="`${eventOf(o).title} · ${o.placement.label}`" @click="emit('select', o.id)" @mouseenter="focusId = o.id; guideX = layout.nodes[o.id]!.x" @mouseleave="focusId = undefined; guideX = undefined" @focus="focusId = o.id" @blur="focusId = undefined">
-          <svg v-if="!layout.nodes[o.id]!.compact" class="h-icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="iconPath(eventOf(o).icon)" /></svg>
-          <span class="h-copy"><strong>{{ eventOf(o).title }}</strong><small v-if="!layout.nodes[o.id]!.compact"><i v-if="marker(o)" class="h-mark" aria-hidden="true">{{ marker(o) }}</i>{{ o.placement.label }}</small></span>
-        </button>
-      </template>
-      <div v-else class="h-card hidden-spoiler" :style="cardStyle(o.id)" aria-hidden="true"><span>◌</span><small v-if="!layout.nodes[o.id]!.compact">Hidden by spoiler setting</small></div>
+      <span v-if="hasSpan(o.id)" :class="['h-span', `tone-${toneOf(o.worldId)}`]" :style="spanStyle(o.id)" aria-hidden="true"></span>
+      <button :data-occ="o.id" :class="['h-card', `tone-${toneOf(o.worldId)}`, `basis-${layout.nodes[o.id]!.basis}`, { selected: o.id === selectedId, dim: dimmed(o), approx: o.placement.kind !== 'exact', compact: layout.nodes[o.id]!.compact }]" :style="cardStyle(o.id)" :aria-pressed="o.id === selectedId" :aria-label="`${eventOf(o).title}, ${o.placement.label}${markerText(o) ? ` (${markerText(o)})` : ''}${basisText[layout.nodes[o.id]!.basis] ? `. ${basisText[layout.nodes[o.id]!.basis]}` : ''}`" :title="`${eventOf(o).title} · ${o.placement.label}`" @click="emit('select', o.id)" @mouseenter="focusId = o.id; guideX = layout.nodes[o.id]!.x" @mouseleave="focusId = undefined; guideX = undefined" @focus="focusId = o.id" @blur="focusId = undefined">
+        <svg v-if="!layout.nodes[o.id]!.compact" class="h-icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="iconPath(eventOf(o).icon)" /></svg>
+        <span class="h-copy"><strong>{{ eventOf(o).title }}</strong><small v-if="!layout.nodes[o.id]!.compact"><i v-if="marker(o)" class="h-mark" aria-hidden="true">{{ marker(o) }}</i>{{ o.placement.label }}</small></span>
+      </button>
     </template>
+
+    <svg class="h-edge-labels" :width="size.w" :height="size.h" aria-hidden="true">
+      <text v-for="item in drawnEdges.filter((e) => e.loop || e.active)" :key="item.edge.id" :x="item.mid.x" :y="item.mid.y - 8" :class="['h-edge-label', item.edge.kind]">{{ item.loop ? '↺ loop' : edgeWord[item.edge.kind] }}</text>
+    </svg>
 
     <div class="ruler" :style="{ top: `${TOP_INSET}px`, height: `${RULER_H}px` }" aria-hidden="true">
       <div v-for="(t, i) in ticks.context" :key="`c${t.t}`" class="tick-context" :style="{ left: `${i === 0 ? Math.max(sx(t.t), 0) : sx(t.t)}px`, visibility: i === 0 && ticks.context[1] && sx(ticks.context[1].t) < 190 ? 'hidden' : 'visible' }"><span>{{ t.label }}</span></div>
